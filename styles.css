@@ -203,6 +203,82 @@ body {
   border-radius: 4px;
 }
 
+.top-teams {
+  margin-bottom: 1rem;
+}
+
+.top-teams-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 0.75rem;
+  margin-bottom: 0.65rem;
+}
+
+.top-teams-title {
+  margin: 0;
+  font-family: var(--font-display);
+  font-size: 0.95rem;
+  font-weight: 700;
+}
+
+.top-teams-hint {
+  margin: 0;
+  font-size: 0.72rem;
+  color: var(--text-muted);
+}
+
+.top-teams-list {
+  display: flex;
+  gap: 0.45rem;
+  overflow-x: auto;
+  padding-bottom: 0.25rem;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: thin;
+}
+
+.top-team-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0.4rem 0.65rem;
+  border: 1px solid var(--border-strong);
+  border-radius: 999px;
+  background: var(--bg-card);
+  font-family: inherit;
+  font-size: 0.78rem;
+  color: var(--text);
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+button.top-team-chip {
+  cursor: pointer;
+  transition: border-color 0.15s, box-shadow 0.15s;
+}
+
+button.top-team-chip:hover {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px var(--accent-glow);
+}
+
+.top-team-logo {
+  width: 1.4rem;
+  height: 1.4rem;
+  object-fit: contain;
+  border-radius: 4px;
+}
+
+.top-team-rank {
+  font-weight: 700;
+  color: var(--accent-2);
+  font-size: 0.7rem;
+}
+
+.top-team-name {
+  font-weight: 600;
+}
+
 .brand h1 {
   margin: 0;
   font-family: var(--font-display);
@@ -935,6 +1011,24 @@ body.modal-open {
 .player-meta {
   font-size: 0.75rem;
   color: var(--text-dim);
+}
+
+.player-avatar {
+  flex-shrink: 0;
+  width: 2.25rem;
+  height: 2.25rem;
+  border-radius: 6px;
+  object-fit: cover;
+  background: var(--bg-card-hover);
+}
+
+.squad-logo {
+  width: 48px;
+  height: 48px;
+  object-fit: contain;
+  border-radius: 6px;
+  box-shadow: 0 1px 4px rgba(15, 23, 42, 0.12);
+  flex-shrink: 0;
 }
 
 @media (max-width: 720px) {

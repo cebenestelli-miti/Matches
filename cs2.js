@@ -1,9 +1,12 @@
 const BO3_API =
   "https://api.bo3.gg/api/v1/matches?scope=widget-matches&page[offset]=0&page[limit]=100&sort=start_date&filter[matches.status][in]=upcoming,current,finished&filter[matches.discipline_id][eq]=1&with=teams,tournament";
 const LOCAL_JSON = "data/cs2-matches.json";
+const LOCAL_ROSTERS = "data/cs2-rosters.json";
 const IS_FILE_PROTOCOL = window.location.protocol === "file:";
 const WINDOW_MS = 365 * 24 * 60 * 60 * 1000;
-const RESULTS_MS = 48 * 60 * 60 * 1000;
+const RESULTS_MS_A = 48 * 60 * 60 * 1000;
+const RESULTS_MS_S = 30 * 24 * 60 * 60 * 1000;
+const FETCH_START_MS = RESULTS_MS_S;
 
 const STORAGE_KEYS = {
   timezone: "cs2_timezone",
@@ -15,6 +18,10 @@ const STORAGE_KEYS = {
 };
 
 let allMatches = [];
+/** @type {Array<{rank:number,name:string,slug:string,logo:string}>} */
+let topTeams = [];
+/** @type {Record<string, {slug:string,logo:string,rank:number|null,coach:string,players:Array}>} */
+let teamRosters = {};
 
 const $ = (sel) => document.querySelector(sel);
 
@@ -39,6 +46,13 @@ const els = {
   statFinished: $("#stat-finished"),
   statTotal: $("#stat-total"),
   statLiveCard: document.querySelector(".stat-live"),
+  rosterModal: $("#roster-modal"),
+  rosterTitle: $("#roster-title"),
+  rosterSubtitle: $("#roster-subtitle"),
+  rosterLogo: $("#roster-logo"),
+  rosterBody: $("#roster-body"),
+  rosterClose: $("#roster-close"),
+  topTeamsList: $("#top-teams-list"),
 };
 
 function normalizeBo3Match(m) {
@@ -51,6 +65,8 @@ function normalizeBo3Match(m) {
     id: m.id,
     team1: m.team1?.name || "TBD",
     team2: m.team2?.name || "TBD",
+    slug1: m.team1?.slug || "",
+    slug2: m.team2?.slug || "",
     logo1: m.team1?.image_url || "",
     logo2: m.team2?.image_url || "",
     status,
@@ -68,18 +84,21 @@ function filterMatchesByWindow(matches) {
   return matches.filter((m) => {
     const t = m.datetime * 1000;
     if (m.tier !== "S" && m.tier !== "A") return false;
-    if (m.status === "finished") return now - t <= RESULTS_MS;
+    if (m.status === "finished") {
+      if (m.tier === "S") return now - t <= RESULTS_MS_S;
+      return now - t <= RESULTS_MS_A;
+    }
     return t <= now + WINDOW_MS;
   });
 }
 
 async function fetchBo3Pages() {
   const now = Date.now();
-  const startIso = new Date(now - RESULTS_MS).toISOString();
+  const startIso = new Date(now - FETCH_START_MS).toISOString();
   const endIso = new Date(now + WINDOW_MS).toISOString();
   let all = [];
 
-  for (let offset = 0; offset < 1000; offset += 100) {
+  for (let offset = 0; ; offset += 100) {
     const params = new URLSearchParams({
       scope: "widget-matches",
       "page[offset]": String(offset),
@@ -106,6 +125,7 @@ async function fetchBo3Pages() {
 function loadEmbeddedMatches() {
   const data = window.__CS2_MATCHES__;
   if (!data?.matches) throw new Error("Bundled CS2 data is missing.");
+  if (data.topTeams) topTeams = data.topTeams;
   return { matches: filterMatchesByWindow(data.matches), source: "bundled data", updated: data.updated };
 }
 
@@ -122,6 +142,7 @@ async function fetchMatches() {
       const res = await fetch(LOCAL_JSON, { cache: "no-store" });
       if (res.ok) {
         const data = await res.json();
+        if (data.topTeams) topTeams = data.topTeams;
         return {
           matches: filterMatchesByWindow(data.matches || []),
           source: "local cache",
@@ -160,11 +181,30 @@ function populateEventFilter() {
 }
 
 function restoreFilters() {
-  els.statusFilter.value = localStorage.getItem(STORAGE_KEYS.status) || "upcoming";
+  const savedStatus = localStorage.getItem(STORAGE_KEYS.status);
+  els.statusFilter.value = savedStatus || "all";
   const tier = localStorage.getItem(STORAGE_KEYS.tier);
   if (tier) els.tierFilter.value = tier;
   const groupByDate = localStorage.getItem(STORAGE_KEYS.groupByDate);
   if (groupByDate !== null) els.groupByDate.checked = groupByDate === "true";
+}
+
+function renderTopTeams() {
+  if (!els.topTeamsList || !topTeams.length) return;
+
+  els.topTeamsList.innerHTML = topTeams
+    .map((team) => {
+      const hasRosterBtn = hasRoster(team.name);
+      const logo = team.logo
+        ? `<img class="top-team-logo" src="${escapeAttr(team.logo)}" alt="" loading="lazy" width="28" height="28">`
+        : "";
+      const inner = `${logo}<span class="top-team-rank">#${team.rank}</span><span class="top-team-name">${escapeHtml(team.name)}</span>`;
+      if (hasRosterBtn) {
+        return `<button type="button" class="top-team-chip team-link" data-team="${escapeAttr(team.name)}">${inner}</button>`;
+      }
+      return `<span class="top-team-chip">${inner}</span>`;
+    })
+    .join("");
 }
 
 function getFilteredMatches() {
@@ -196,6 +236,118 @@ function sortMatches(matches) {
     const sb = order[b.status] ?? 3;
     if (sa !== sb) return sa - sb;
     return a.datetime - b.datetime;
+  });
+}
+
+function isRealTeam(name) {
+  return name && name !== "TBD";
+}
+
+function getRosterForTeam(name) {
+  return teamRosters[name] || null;
+}
+
+function hasRoster(name) {
+  return isRealTeam(name) && !!getRosterForTeam(name)?.players?.length;
+}
+
+async function loadRosters() {
+  if (window.__CS2_ROSTERS__?.teams) {
+    teamRosters = window.__CS2_ROSTERS__.teams;
+    return;
+  }
+  if (!IS_FILE_PROTOCOL) {
+    try {
+      const res = await fetch(LOCAL_ROSTERS, { cache: "no-store" });
+      if (res.ok) {
+        const data = await res.json();
+        if (data.teams) teamRosters = data.teams;
+      }
+    } catch (err) {
+      console.warn("Could not load CS2 rosters:", err);
+    }
+  }
+}
+
+function renderTeamName(name) {
+  const label = escapeHtml(name);
+  if (!hasRoster(name)) {
+    return `<span class="team-name">${label}</span>`;
+  }
+  return `<button type="button" class="team-name team-link" data-team="${escapeAttr(name)}">${label}</button>`;
+}
+
+function renderPlayerRow(player) {
+  const avatar = player.image
+    ? `<img class="player-avatar" src="${escapeAttr(player.image)}" alt="" loading="lazy" width="36" height="36">`
+    : `<span class="player-no">—</span>`;
+  const meta = [player.name, player.country].filter(Boolean).join(" · ");
+
+  return `
+    <li class="player-row">
+      ${avatar}
+      <div class="player-info">
+        <span class="player-name">${escapeHtml(player.nickname)}</span>
+        ${meta ? `<span class="player-meta">${escapeHtml(meta)}</span>` : ""}
+      </div>
+    </li>
+  `;
+}
+
+function openRosterModal(teamName) {
+  const roster = getRosterForTeam(teamName);
+  if (!roster) return;
+
+  if (roster.logo) {
+    els.rosterLogo.src = roster.logo;
+    els.rosterLogo.hidden = false;
+  } else {
+    els.rosterLogo.hidden = true;
+  }
+
+  els.rosterTitle.textContent = teamName;
+  const subtitleParts = [];
+  if (roster.rank) subtitleParts.push(`BO3 rank #${roster.rank}`);
+  if (roster.coach) subtitleParts.push(`Coach: ${roster.coach}`);
+  subtitleParts.push(`${roster.players.length} players`);
+  els.rosterSubtitle.textContent = subtitleParts.join(" · ");
+
+  els.rosterBody.innerHTML = `
+    <section class="squad-section">
+      <h3 class="squad-section-title">Active roster</h3>
+      <ul class="player-list">
+        ${roster.players.map(renderPlayerRow).join("")}
+      </ul>
+    </section>
+  `;
+
+  els.rosterModal.hidden = false;
+  els.rosterModal.setAttribute("aria-hidden", "false");
+  document.body.classList.add("modal-open");
+  els.rosterClose.focus();
+}
+
+function closeRosterModal() {
+  els.rosterModal.hidden = true;
+  els.rosterModal.setAttribute("aria-hidden", "true");
+  document.body.classList.remove("modal-open");
+}
+
+function handleRosterClick(event) {
+  const btn = event.target.closest(".team-link");
+  if (!btn) return;
+  event.preventDefault();
+  openRosterModal(btn.dataset.team);
+}
+
+function initRosterModal() {
+  const onTeamClick = handleRosterClick;
+  els.matchesContainer.addEventListener("click", onTeamClick);
+  els.topTeamsList?.addEventListener("click", onTeamClick);
+  els.rosterClose.addEventListener("click", closeRosterModal);
+  els.rosterModal.querySelector("[data-close-roster]").addEventListener("click", closeRosterModal);
+  document.addEventListener("keydown", (e) => {
+    if (e.key === "Escape" && !els.rosterModal.hidden) closeRosterModal();
   });
 }
 
@@ -244,7 +396,7 @@ function renderMatchCard(match, tz) {
     <article class="${cardClass}" data-id="${match.id}">
       <div class="team team-home">
         ${logo1}
-        <span class="team-name">${escapeHtml(match.team1)}</span>
+        ${renderTeamName(match.team1)}
       </div>
       <div class="match-center">
         ${renderCenter(match, tz)}
@@ -252,7 +404,7 @@ function renderMatchCard(match, tz) {
       </div>
       <div class="team team-away">
         ${logo2}
-        <span class="team-name">${escapeHtml(match.team2)}</span>
+        ${renderTeamName(match.team2)}
       </div>
       <div class="match-meta">
         <span class="tier-tag ${tierClass}">${match.tier}-Tier</span>
@@ -342,6 +494,7 @@ async function loadData() {
     populateTeamFilter();
     populateEventFilter();
     updateStats();
+    renderTopTeams();
     setMeta(source, updated);
     render();
   } catch (err) {
@@ -368,6 +521,7 @@ function boot() {
   initSportPicker("cs2");
   initTimezoneSelect(els.timezoneSelect, STORAGE_KEYS.timezone);
   restoreFilters();
+  initRosterModal();
 
   els.refreshBtn.addEventListener("click", loadData);
   els.retryBtn.addEventListener("click", loadData);
@@ -379,8 +533,13 @@ function boot() {
   els.groupByDate.addEventListener("change", saveAndRender);
   els.searchInput.addEventListener("input", debounce(render, 200));
 
-  loadData();
-  startMatchCountdowns();
+  loadRosters().then(() => {
+    if (!topTeams.length && window.__CS2_MATCHES__?.topTeams) {
+      topTeams = window.__CS2_MATCHES__.topTeams;
+    }
+    loadData();
+    startMatchCountdowns();
+  });
 }
 
 if (document.readyState === "loading") {

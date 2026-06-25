@@ -52,12 +52,20 @@
       </div>
       <div class="stat-card">
         <span class="stat-value" id="stat-finished">—</span>
-        <span class="stat-label">Last 48h</span>
+        <span class="stat-label">Recent results</span>
       </div>
       <div class="stat-card">
         <span class="stat-value" id="stat-total">—</span>
         <span class="stat-label">Total matches</span>
       </div>
+    </section>
+
+    <section class="top-teams" aria-label="Top ranked teams">
+      <div class="top-teams-head">
+        <h2 class="top-teams-title">Top teams</h2>
+        <p class="top-teams-hint">BO3 world rank · click for roster</p>
+      </div>
+      <div id="top-teams-list" class="top-teams-list"></div>
     </section>
 
     <section class="controls" aria-label="Filters">
@@ -75,10 +83,10 @@
         <div class="control-group">
           <label for="status-filter">Status</label>
           <select id="status-filter">
-            <option value="all">All matches</option>
-            <option value="upcoming" selected>Upcoming only</option>
+            <option value="all" selected>All matches</option>
+            <option value="upcoming">Upcoming only</option>
             <option value="live">Live only</option>
-            <option value="finished">Results (48h)</option>
+            <option value="finished">Results only</option>
           </select>
         </div>
       </div>
@@ -130,11 +138,29 @@
   </main>
 
   <footer class="site-footer">
-    <p>Match data via <a href="https://bo3.gg" target="_blank" rel="noopener">BO3.gg</a>. S-Tier &amp; A-Tier events for the next 12 months plus results from the last 48 hours.</p>
+    <p>Match data via <a href="https://bo3.gg" target="_blank" rel="noopener">BO3.gg</a>. S &amp; A-tier events — upcoming for 12 months, S-tier results for 30 days, A-tier results for 48 hours.</p>
   </footer>
+
+  <div id="roster-modal" class="modal" hidden aria-hidden="true">
+    <div class="modal-backdrop" data-close-roster></div>
+    <div class="modal-panel" role="dialog" aria-modal="true" aria-labelledby="roster-title">
+      <header class="modal-header">
+        <div class="modal-title-wrap">
+          <img id="roster-logo" class="squad-logo" src="" alt="" width="48" height="48" hidden>
+          <div>
+            <h2 id="roster-title" class="modal-title">Team roster</h2>
+            <p id="roster-subtitle" class="modal-subtitle"></p>
+          </div>
+        </div>
+        <button type="button" class="modal-close" id="roster-close" aria-label="Close roster panel">&times;</button>
+      </header>
+      <div id="roster-body" class="modal-body"></div>
+    </div>
+  </div>
 
   <script src="shared.js"></script>
   <script src="data/cs2-matches.js"></script>
+  <script src="data/cs2-rosters.js"></script>
   <script src="cs2.js"></script>
 </body>
 </html>

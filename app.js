@@ -54,16 +54,6 @@ const els = {
   squadFlag: $("#squad-flag"),
   squadBody: $("#squad-body"),
   squadClose: $("#squad-close"),
-  countdownSection: $("#countdown-section"),
-  countdownLabel: $("#countdown-label"),
-  countdownMatch: $("#countdown-match"),
-  countdownKickoff: $("#countdown-kickoff"),
-  countdownTimer: $("#countdown-timer"),
-  countdownLive: $("#countdown-live"),
-  cdDays: $("#cd-days"),
-  cdHours: $("#cd-hours"),
-  cdMins: $("#cd-mins"),
-  cdSecs: $("#cd-secs"),
 };
 
 /** @type {Array<{id:number,team1:string,team2:string,flag1?:string,flag2?:string,status:string,score:number[]|null,live_minute:number|null,datetime:number,group:string,round:string,ground:string}>} */
@@ -470,7 +460,10 @@ function renderCenter(match, tz) {
   if (match.status === "live") {
     return `<span class="match-vs">IN PLAY</span>`;
   }
-  return `<span class="match-time">${formatTime(match.datetime, tz)}</span>`;
+  return `
+    <span class="match-time">${formatTime(match.datetime, tz)}</span>
+    <span class="match-countdown" data-datetime="${match.datetime}">—</span>
+  `;
 }
 
 function resolveTeamKey(name) {
@@ -654,93 +647,35 @@ function updateStats() {
   els.statFinished.textContent = finished;
   els.statTotal.textContent = allMatches.length;
   els.statLiveCard?.classList.toggle("has-live", live > 0);
-  updateCountdown();
 }
 
-function getNextMatchForCountdown() {
-  const team = els.teamFilter.value;
-  const group = els.groupFilter.value;
-  const query = els.searchInput.value.trim().toLowerCase();
-
-  const candidates = allMatches.filter((m) => {
-    if (m.status === "finished") return false;
-    if (team && m.team1 !== team && m.team2 !== team) return false;
-    if (group && m.group !== group && m.round !== group) return false;
-    if (query) {
-      const haystack = [m.team1, m.team2, m.group, m.round, m.ground].join(" ").toLowerCase();
-      if (!haystack.includes(query)) return false;
-    }
-    return true;
-  });
-
-  const live = candidates.filter((m) => m.status === "live").sort((a, b) => a.datetime - b.datetime);
-  if (live.length) return live[0];
-
-  const upcoming = candidates
-    .filter((m) => m.status === "upcoming")
-    .sort((a, b) => a.datetime - b.datetime);
-  return upcoming[0] || null;
-}
-
-function padCountdown(n) {
-  return String(n).padStart(2, "0");
-}
-
-function updateCountdown() {
-  if (!els.countdownSection) return;
-
-  const match = getNextMatchForCountdown();
-  const tz = els.timezoneSelect?.value || getDefaultTimezone();
-
-  if (!match) {
-    els.countdownSection.hidden = true;
-    return;
-  }
-
-  els.countdownSection.hidden = false;
-  els.countdownMatch.textContent = `${match.team1} vs ${match.team2}`;
-
-  const kickoffStr = `${formatDateHeading(match.datetime, tz)} · ${formatTime(match.datetime, tz)}`;
-  els.countdownKickoff.textContent = kickoffStr;
-
-  if (match.status === "live") {
-    els.countdownLabel.textContent = "Live now";
-    els.countdownTimer.hidden = true;
-    els.countdownLive.hidden = false;
-    return;
-  }
-
-  els.countdownLabel.textContent = "Next kickoff in";
-  els.countdownTimer.hidden = false;
-  els.countdownLive.hidden = true;
-
-  const remaining = match.datetime * 1000 - Date.now();
-
-  if (remaining <= 0) {
-    els.cdDays.textContent = "00";
-    els.cdHours.textContent = "00";
-    els.cdMins.textContent = "00";
-    els.cdSecs.textContent = "00";
-    els.countdownLabel.textContent = "Kickoff imminent";
-    return;
-  }
-
-  const totalSec = Math.floor(remaining / 1000);
+function formatCountdownShort(ms) {
+  if (ms <= 0) return "Starting soon";
+  const totalSec = Math.floor(ms / 1000);
   const days = Math.floor(totalSec / 86400);
   const hours = Math.floor((totalSec % 86400) / 3600);
   const mins = Math.floor((totalSec % 3600) / 60);
   const secs = totalSec % 60;
+  const parts = [];
+  if (days > 0) parts.push(`${days}d`);
+  if (days > 0 || hours > 0) parts.push(`${hours}h`);
+  parts.push(`${mins}m`);
+  parts.push(`${secs}s`);
+  return `in ${parts.join(" ")}`;
+}
 
-  els.cdDays.textContent = padCountdown(days);
-  els.cdHours.textContent = padCountdown(hours);
-  els.cdMins.textContent = padCountdown(mins);
-  els.cdSecs.textContent = padCountdown(secs);
+function updateMatchCountdowns() {
+  const now = Date.now();
+  document.querySelectorAll(".match-countdown").forEach((el) => {
+    const kickoff = Number(el.dataset.datetime) * 1000;
+    el.textContent = formatCountdownShort(kickoff - now);
+  });
 }
 
 function startCountdown() {
   if (countdownInterval) clearInterval(countdownInterval);
-  updateCountdown();
-  countdownInterval = setInterval(updateCountdown, 1000);
+  updateMatchCountdowns();
+  countdownInterval = setInterval(updateMatchCountdowns, 1000);
 }
 
 function render() {
@@ -758,6 +693,7 @@ function render() {
 
   if (!groupByDate) {
     els.matchesContainer.innerHTML = filtered.map((m) => renderMatchCard(m, tz)).join("");
+    updateMatchCountdowns();
     return;
   }
 
@@ -782,6 +718,8 @@ function render() {
       `;
     })
     .join("");
+
+  updateMatchCountdowns();
 }
 
 function setMeta(source, updated) {
@@ -842,7 +780,6 @@ function saveAndRender() {
   localStorage.setItem(STORAGE_KEYS.group, els.groupFilter.value);
   localStorage.setItem(STORAGE_KEYS.groupByDate, String(els.groupByDate.checked));
   render();
-  updateCountdown();
 }
 
 function debounce(fn, ms) {
@@ -865,10 +802,7 @@ function boot() {
   els.statusFilter.addEventListener("change", saveAndRender);
   els.groupFilter.addEventListener("change", saveAndRender);
   els.groupByDate.addEventListener("change", saveAndRender);
-  els.searchInput.addEventListener("input", debounce(() => {
-    render();
-    updateCountdown();
-  }, 200));
+  els.searchInput.addEventListener("input", debounce(render, 200));
 
   loadSquads().then(() => {
     loadData();

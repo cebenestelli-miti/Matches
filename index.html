@@ -1,0 +1,141 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="description" content="2026 FIFA World Cup match schedule — dates, times, live updates, and results in your timezone.">
+  <meta name="theme-color" content="#f7f9fc">
+  <title>World Cup 2026 — Match Schedule</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,400;0,9..40,500;0,9..40,600;0,9..40,700;1,9..40,400&family=Outfit:wght@600;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <div class="page-bg" aria-hidden="true"></div>
+
+  <header class="site-header">
+    <div class="header-inner">
+      <div class="brand">
+        <span class="brand-icon" aria-hidden="true">⚽</span>
+        <div>
+          <h1>World Cup 2026</h1>
+          <p class="brand-sub">United States · Canada · Mexico</p>
+        </div>
+      </div>
+      <div class="header-actions">
+        <button type="button" id="refresh-btn" class="btn btn-ghost" title="Reload latest match data">
+          <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+            <path d="M21 12a9 9 0 1 1-2.64-6.36"/><polyline points="21 3 21 9 15 9"/>
+          </svg>
+          <span class="btn-label">Refresh</span>
+        </button>
+      </div>
+    </div>
+  </header>
+
+  <main class="main">
+    <section class="stats-bar" id="stats-bar" aria-label="Tournament summary">
+      <div class="stat-card">
+        <span class="stat-value" id="stat-upcoming">—</span>
+        <span class="stat-label">Upcoming</span>
+      </div>
+      <div class="stat-card stat-live">
+        <span class="stat-value" id="stat-live">—</span>
+        <span class="stat-label">Live now</span>
+      </div>
+      <div class="stat-card">
+        <span class="stat-value" id="stat-finished">—</span>
+        <span class="stat-label">Finished</span>
+      </div>
+      <div class="stat-card">
+        <span class="stat-value" id="stat-total">—</span>
+        <span class="stat-label">Total matches</span>
+      </div>
+    </section>
+
+    <section class="controls" aria-label="Filters">
+      <div class="controls-row">
+        <div class="control-group control-search">
+          <label for="search-input">Search</label>
+          <input type="search" id="search-input" placeholder="Team, venue, group…" autocomplete="off">
+        </div>
+        <div class="control-group">
+          <label for="team-filter">Team</label>
+          <select id="team-filter">
+            <option value="">All teams</option>
+          </select>
+        </div>
+        <div class="control-group">
+          <label for="status-filter">Status</label>
+          <select id="status-filter">
+            <option value="all">All matches</option>
+            <option value="upcoming" selected>Upcoming only</option>
+            <option value="live">Live only</option>
+            <option value="finished">Finished only</option>
+          </select>
+        </div>
+      </div>
+      <div class="controls-row">
+        <div class="control-group">
+          <label for="group-filter">Group / Stage</label>
+          <select id="group-filter">
+            <option value="">All stages</option>
+          </select>
+        </div>
+        <div class="control-group">
+          <label for="timezone-select">Timezone</label>
+          <select id="timezone-select"></select>
+        </div>
+        <div class="control-group control-toggle">
+          <label class="toggle-label">
+            <input type="checkbox" id="group-by-date" checked>
+            <span>Group by date</span>
+          </label>
+        </div>
+      </div>
+    </section>
+
+    <p class="meta-line" id="meta-line" aria-live="polite"></p>
+
+    <div id="loading" class="loading" hidden>
+      <div class="spinner" aria-hidden="true"></div>
+      <p>Loading matches…</p>
+    </div>
+
+    <div id="error" class="error-banner" hidden role="alert">
+      <p id="error-message"></p>
+      <button type="button" class="btn btn-small" id="retry-btn">Try again</button>
+    </div>
+
+    <div id="matches-container" class="matches-container"></div>
+
+    <p id="empty-state" class="empty-state" hidden>No matches match your filters. Try adjusting your selection.</p>
+  </main>
+
+  <footer class="site-footer">
+    <p>Match data from <a href="https://wcup2026.org" target="_blank" rel="noopener">World Cup 2026 Companion</a> (openfootball dataset). Refresh the page for the latest results.</p>
+  </footer>
+
+  <div id="squad-modal" class="modal" hidden aria-hidden="true">
+    <div class="modal-backdrop" data-close-squad></div>
+    <div class="modal-panel" role="dialog" aria-modal="true" aria-labelledby="squad-title">
+      <header class="modal-header">
+        <div class="modal-title-wrap">
+          <img id="squad-flag" class="squad-flag" src="" alt="" width="48" height="34" hidden>
+          <div>
+            <h2 id="squad-title" class="modal-title">Team squad</h2>
+            <p id="squad-subtitle" class="modal-subtitle"></p>
+          </div>
+        </div>
+        <button type="button" class="modal-close" id="squad-close" aria-label="Close squad panel">&times;</button>
+      </header>
+      <div id="squad-body" class="modal-body"></div>
+    </div>
+  </div>
+
+  <script src="data/matches.js"></script>
+  <script src="data/squads.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>

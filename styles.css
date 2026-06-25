@@ -93,6 +93,116 @@ body {
   filter: drop-shadow(0 2px 8px var(--accent-glow));
 }
 
+.sport-picker {
+  position: relative;
+}
+
+.sport-picker-btn {
+  display: flex;
+  align-items: center;
+  gap: 0.15rem;
+  padding: 0.35rem 0.5rem;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-sm);
+  background: var(--bg-card);
+  cursor: pointer;
+  font-family: inherit;
+  transition: border-color 0.15s, box-shadow 0.15s;
+}
+
+.sport-picker-btn:hover {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px var(--accent-glow);
+}
+
+.sport-picker-icon {
+  font-size: 1.75rem;
+  line-height: 1;
+  filter: drop-shadow(0 2px 8px var(--accent-glow));
+}
+
+.sport-picker-caret {
+  font-size: 0.65rem;
+  color: var(--text-muted);
+  margin-top: 0.15rem;
+}
+
+.sport-picker-menu {
+  position: absolute;
+  top: calc(100% + 0.35rem);
+  left: 0;
+  z-index: 100;
+  min-width: 12rem;
+  padding: 0.35rem;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-sm);
+  background: var(--bg-card);
+  box-shadow: var(--shadow-lg);
+}
+
+.sport-option {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.55rem 0.75rem;
+  border-radius: calc(var(--radius-sm) - 2px);
+  color: var(--text);
+  text-decoration: none;
+  font-size: 0.875rem;
+  font-weight: 500;
+}
+
+.sport-option:hover {
+  background: rgba(37, 99, 235, 0.08);
+}
+
+.sport-option.is-active {
+  background: rgba(37, 99, 235, 0.12);
+  color: var(--accent-2);
+  font-weight: 600;
+}
+
+.page-cs2 .page-bg {
+  background:
+    radial-gradient(ellipse 80% 50% at 50% -20%, rgba(249, 115, 22, 0.08), transparent),
+    radial-gradient(ellipse 60% 40% at 100% 0%, rgba(37, 99, 235, 0.06), transparent),
+    var(--bg);
+}
+
+.match-meta .tier-tag {
+  font-weight: 700;
+  font-size: 0.68rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  padding: 0.1rem 0.45rem;
+  border-radius: 999px;
+}
+
+.tier-tag.tier-s {
+  background: rgba(234, 179, 8, 0.15);
+  color: #b45309;
+}
+
+.tier-tag.tier-a {
+  background: rgba(37, 99, 235, 0.1);
+  color: var(--accent-2);
+}
+
+.match-link {
+  color: var(--accent-2);
+  text-decoration: none;
+  font-weight: 500;
+}
+
+.match-link:hover {
+  text-decoration: underline;
+}
+
+.team-logo {
+  object-fit: contain;
+  border-radius: 4px;
+}
+
 .brand h1 {
   margin: 0;
   font-family: var(--font-display);

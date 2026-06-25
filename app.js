@@ -59,28 +59,6 @@ const els = {
 /** @type {Array<{id:number,team1:string,team2:string,flag1?:string,flag2?:string,status:string,score:number[]|null,live_minute:number|null,datetime:number,group:string,round:string,ground:string}>} */
 let allMatches = [];
 
-const COMMON_TIMEZONES = [
-  "UTC",
-  "America/New_York",
-  "America/Chicago",
-  "America/Denver",
-  "America/Los_Angeles",
-  "America/Toronto",
-  "America/Mexico_City",
-  "America/Sao_Paulo",
-  "Europe/London",
-  "Europe/Paris",
-  "Europe/Berlin",
-  "Europe/Madrid",
-  "Africa/Johannesburg",
-  "Asia/Tokyo",
-  "Asia/Seoul",
-  "Asia/Shanghai",
-  "Asia/Dubai",
-  "Australia/Sydney",
-  "Pacific/Auckland",
-];
-
 function getDefaultTimezone() {
   try {
     return Intl.DateTimeFormat().resolvedOptions().timeZone;
@@ -791,6 +769,7 @@ function debounce(fn, ms) {
 }
 
 function boot() {
+  initSportPicker("worldcup");
   initTimezoneSelect();
   restoreFilters();
   initSquadModal();

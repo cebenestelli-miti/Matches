@@ -210,6 +210,112 @@ body {
   animation: pulse-live 2s ease-in-out infinite;
 }
 
+/* Countdown */
+.countdown {
+  background: linear-gradient(135deg, #ffffff 0%, #f0fdf8 100%);
+  border: 1px solid rgba(5, 150, 105, 0.2);
+  border-radius: var(--radius);
+  padding: 1.1rem 1.25rem;
+  margin-bottom: 1.25rem;
+  text-align: center;
+  box-shadow: var(--shadow);
+}
+
+.countdown[hidden] {
+  display: none !important;
+}
+
+.countdown-label {
+  margin: 0 0 0.35rem;
+  font-size: 0.72rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--accent);
+}
+
+.countdown-match {
+  margin: 0 0 0.25rem;
+  font-family: var(--font-display);
+  font-size: 1.15rem;
+  font-weight: 700;
+  color: var(--text);
+}
+
+.countdown-kickoff {
+  margin: 0 0 0.85rem;
+  font-size: 0.8rem;
+  color: var(--text-muted);
+}
+
+.countdown-timer {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.35rem;
+}
+
+.countdown-unit {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  min-width: 3.25rem;
+}
+
+.countdown-value {
+  font-family: var(--font-display);
+  font-size: 1.75rem;
+  font-weight: 800;
+  line-height: 1;
+  color: var(--text);
+  font-variant-numeric: tabular-nums;
+}
+
+.countdown-unit-label {
+  margin-top: 0.25rem;
+  font-size: 0.65rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--text-dim);
+}
+
+.countdown-sep {
+  font-family: var(--font-display);
+  font-size: 1.5rem;
+  font-weight: 700;
+  color: var(--text-dim);
+  margin-bottom: 1rem;
+}
+
+.countdown-live-msg {
+  margin: 0;
+  font-family: var(--font-display);
+  font-size: 1.1rem;
+  font-weight: 700;
+  color: var(--live);
+  animation: pulse-live 2s ease-in-out infinite;
+}
+
+.countdown-live-msg[hidden],
+.countdown-timer[hidden] {
+  display: none !important;
+}
+
+@media (max-width: 400px) {
+  .countdown-value {
+    font-size: 1.4rem;
+  }
+
+  .countdown-unit {
+    min-width: 2.6rem;
+  }
+
+  .countdown-match {
+    font-size: 1rem;
+  }
+}
+
 @keyframes pulse-live {
   0%, 100% { box-shadow: 0 0 12px var(--live-glow); }
   50% { box-shadow: 0 0 24px var(--live-glow); }

@@ -9,7 +9,6 @@ const STORAGE_KEYS = {
   status: "wc2026_status",
   group: "wc2026_group",
   groupByDate: "wc2026_group_by_date",
-  standingsOpen: "wc2026_standings_open",
 };
 
 const KNOCKOUT_ROUNDS = [
@@ -65,7 +64,6 @@ const els = {
   squadBody: $("#squad-body"),
   squadClose: $("#squad-close"),
   standingsContainer: $("#standings-container"),
-  standingsDetails: $("#standings-details"),
 };
 
 /** @type {Array<{id:number,team1:string,team2:string,flag1?:string,flag2?:string,status:string,score:number[]|null,live_minute:number|null,datetime:number,group:string,round:string,ground:string}>} */
@@ -529,39 +527,73 @@ function renderKnockoutTeam(name, groupStandings) {
   return `<span class="knockout-placeholder">${escapeHtml(name)}</span>`;
 }
 
-function renderKnockoutRound(roundName, matches, groupStandings) {
-  const body = matches
-    .map(
-      (m) => `
-        <tr class="knockout-row${m.status === "live" ? " is-live" : ""}${m.status === "finished" ? " is-finished" : ""}">
-          <td class="knockout-cell-team">${renderKnockoutTeam(m.team1, groupStandings)}</td>
-          <td class="knockout-cell-score">${renderKnockoutScore(m)}</td>
-          <td class="knockout-cell-team knockout-cell-away">${renderKnockoutTeam(m.team2, groupStandings)}</td>
-        </tr>
-      `
-    )
-    .join("");
-
+function renderStageDropdown(title, meta, innerHtml) {
   return `
-    <div class="standings-group knockout-group">
-      <h3 class="standings-group-title">${escapeHtml(roundName)}</h3>
-      <div class="standings-table-wrap">
-        <table class="standings-table knockout-table">
-          <thead>
-            <tr>
-              <th scope="col">Home</th>
-              <th scope="col">Score</th>
-              <th scope="col">Away</th>
-            </tr>
-          </thead>
-          <tbody>${body}</tbody>
-        </table>
-      </div>
-    </div>
+    <details class="stage-dropdown">
+      <summary class="stage-dropdown-summary">
+        <span class="stage-dropdown-label">
+          <span class="stage-dropdown-title">${escapeHtml(title)}</span>
+          ${meta ? `<span class="stage-dropdown-meta">${escapeHtml(meta)}</span>` : ""}
+        </span>
+        <span class="stage-caret" aria-hidden="true">▾</span>
+      </summary>
+      <div class="stage-dropdown-body">${innerHtml}</div>
+    </details>
   `;
 }
 
-function renderGroupStandingsTable(group, rows) {
+function renderKnockoutFixtureMeta(match, tz) {
+  if (match.status === "live") {
+    return `<span class="fixture-badge fixture-live">Live</span>`;
+  }
+  if (match.status === "finished") {
+    return `<span class="fixture-badge fixture-finished">FT</span>`;
+  }
+  return `<span class="fixture-badge fixture-upcoming">${escapeHtml(formatTime(match.datetime, tz))}</span>`;
+}
+
+function renderKnockoutFixtures(matches, groupStandings, tz) {
+  const items = matches
+    .map((m) => {
+      const rowClass = [
+        "knockout-fixture",
+        m.status === "live" ? "is-live" : "",
+        m.status === "finished" ? "is-finished" : "",
+      ]
+        .filter(Boolean)
+        .join(" ");
+
+      return `
+        <li class="${rowClass}">
+          <div class="knockout-fixture-teams">
+            <span class="knockout-fixture-team">${renderKnockoutTeam(m.team1, groupStandings)}</span>
+            <span class="knockout-fixture-score">${renderKnockoutScore(m)}</span>
+            <span class="knockout-fixture-team">${renderKnockoutTeam(m.team2, groupStandings)}</span>
+          </div>
+          ${renderKnockoutFixtureMeta(m, tz)}
+        </li>
+      `;
+    })
+    .join("");
+
+  return `<ol class="knockout-fixtures">${items}</ol>`;
+}
+
+function renderKnockoutRoundDropdown(roundName, matches, groupStandings, tz) {
+  const finished = matches.filter((m) => m.status === "finished").length;
+  const live = matches.filter((m) => m.status === "live").length;
+  const metaParts = [`${matches.length} fixtures`];
+  if (live) metaParts.push(`${live} live`);
+  else if (finished) metaParts.push(`${finished} played`);
+
+  return renderStageDropdown(
+    roundName,
+    metaParts.join(" · "),
+    renderKnockoutFixtures(matches, groupStandings, tz)
+  );
+}
+
+function renderGroupStandingsTable(rows) {
   const body = rows
     .map((row, i) => {
       const gd = row.gf - row.ga;
@@ -582,31 +614,35 @@ function renderGroupStandingsTable(group, rows) {
     .join("");
 
   return `
-    <div class="standings-group">
-      <h3 class="standings-group-title">${escapeHtml(group)}</h3>
-      <div class="standings-table-wrap">
-        <table class="standings-table">
-          <thead>
-            <tr>
-              <th scope="col">Team</th>
-              <th scope="col" title="Played">P</th>
-              <th scope="col" class="standings-hide-sm" title="Won">W</th>
-              <th scope="col" class="standings-hide-sm" title="Drawn">D</th>
-              <th scope="col" class="standings-hide-sm" title="Lost">L</th>
-              <th scope="col" title="Goal difference">GD</th>
-              <th scope="col" title="Points">Pts</th>
-            </tr>
-          </thead>
-          <tbody>${body}</tbody>
-        </table>
-      </div>
+    <div class="standings-table-wrap">
+      <table class="standings-table">
+        <thead>
+          <tr>
+            <th scope="col">Team</th>
+            <th scope="col" title="Played">P</th>
+            <th scope="col" class="standings-hide-sm" title="Won">W</th>
+            <th scope="col" class="standings-hide-sm" title="Drawn">D</th>
+            <th scope="col" class="standings-hide-sm" title="Lost">L</th>
+            <th scope="col" title="Goal difference">GD</th>
+            <th scope="col" title="Points">Pts</th>
+          </tr>
+        </thead>
+        <tbody>${body}</tbody>
+      </table>
     </div>
   `;
+}
+
+function renderGroupStageDropdown(group, rows) {
+  const leader = rows[0];
+  const meta = leader ? `${leader.team} · ${leader.pts} pts` : "";
+  return renderStageDropdown(group, meta, renderGroupStandingsTable(rows));
 }
 
 function renderStandings() {
   if (!els.standingsContainer) return;
 
+  const tz = els.timezoneSelect?.value || "UTC";
   const groupStandings = computeStandings(allMatches);
   const groupFilter = els.groupFilter.value;
   let groupNames = Object.keys(groupStandings).sort((a, b) => a.localeCompare(b));
@@ -620,43 +656,19 @@ function renderStandings() {
     knockoutRounds = knockoutRounds.filter((r) => r === groupFilter);
   }
 
-  const groupHtml = groupNames.length
-    ? `
-        <div class="standings-block">
-          <h3 class="standings-block-title">Group stage</h3>
-          <div class="standings-grid">${groupNames.map((g) => renderGroupStandingsTable(g, groupStandings[g])).join("")}</div>
-        </div>
-      `
-    : "";
+  const stages = [
+    ...groupNames.map((g) => renderGroupStageDropdown(g, groupStandings[g])),
+    ...knockoutRounds.map((r) =>
+      renderKnockoutRoundDropdown(r, getKnockoutMatches(allMatches, r), groupStandings, tz)
+    ),
+  ];
 
-  const knockoutHtml = knockoutRounds.length
-    ? `
-        <div class="standings-block">
-          <h3 class="standings-block-title">Knockout stage</h3>
-          <div class="standings-grid standings-grid-knockout">
-            ${knockoutRounds.map((r) => renderKnockoutRound(r, getKnockoutMatches(allMatches, r), groupStandings)).join("")}
-          </div>
-        </div>
-      `
-    : "";
-
-  if (!groupHtml && !knockoutHtml) {
+  if (!stages.length) {
     els.standingsContainer.innerHTML = `<p class="standings-empty">No standings for the selected filter.</p>`;
     return;
   }
 
-  els.standingsContainer.innerHTML = groupHtml + knockoutHtml;
-}
-
-function initStandingsToggle() {
-  if (!els.standingsDetails) return;
-
-  const saved = localStorage.getItem(STORAGE_KEYS.standingsOpen);
-  if (saved === "true") els.standingsDetails.open = true;
-
-  els.standingsDetails.addEventListener("toggle", () => {
-    localStorage.setItem(STORAGE_KEYS.standingsOpen, String(els.standingsDetails.open));
-  });
+  els.standingsContainer.innerHTML = stages.join("");
 }
 
 function getFilteredMatches() {
@@ -1043,7 +1055,6 @@ function boot() {
   initTimezoneSelect();
   restoreFilters();
   initSquadModal();
-  initStandingsToggle();
 
   els.refreshBtn.addEventListener("click", loadData);
   els.retryBtn.addEventListener("click", loadData);

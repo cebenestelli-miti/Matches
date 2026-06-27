@@ -33,8 +33,6 @@ const POS_LABELS = { GK: "Goalkeepers", DF: "Defenders", MF: "Midfielders", FW: 
 /** @type {Record<string, {group:string, coach:string, players:Array}>} */
 let squadTeams = {};
 
-let countdownInterval = null;
-
 const $ = (sel) => document.querySelector(sel);
 
 const els = {
@@ -160,16 +158,34 @@ function inferStatusFromScore(score, datetime) {
 }
 
 function normalizePrimaryMatch(m) {
+  const datetime = Number(m.datetime);
+  const hasScore = Array.isArray(m.score) && m.score.length === 2;
+  const apiStatus = m.status || "upcoming";
+
+  let status = apiStatus;
+  if (apiStatus === "finished") {
+    status = "finished";
+  } else if (hasScore) {
+    status = "finished";
+  } else if (apiStatus === "live") {
+    const now = Date.now() / 1000;
+    if (now > datetime + 2 * 3600) status = "finished";
+    else if (now < datetime) status = "upcoming";
+    else status = "live";
+  } else {
+    status = inferStatusFromScore(null, datetime);
+  }
+
   return {
     id: m.id,
     team1: m.team1,
     team2: m.team2,
     flag1: m.flag1 || "",
     flag2: m.flag2 || "",
-    status: m.status || "upcoming",
-    score: m.status === "finished" && m.score ? m.score : null,
-    live_minute: m.live_minute,
-    datetime: m.datetime,
+    status,
+    score: status === "finished" && hasScore ? m.score : null,
+    live_minute: status === "live" ? m.live_minute : null,
+    datetime,
     group: m.group || "",
     round: m.round || "",
     ground: m.ground || "",
@@ -934,11 +950,17 @@ function getFilteredMatches() {
 }
 
 function sortMatches(matches) {
+  const now = Date.now() / 1000;
   return [...matches].sort((a, b) => {
     const statusOrder = { live: 0, upcoming: 1, finished: 2 };
     const sa = statusOrder[a.status] ?? 3;
     const sb = statusOrder[b.status] ?? 3;
     if (sa !== sb) return sa - sb;
+    if (a.status === "upcoming" && b.status === "upcoming") {
+      const aPast = a.datetime <= now;
+      const bPast = b.datetime <= now;
+      if (aPast !== bPast) return aPast ? 1 : -1;
+    }
     return a.datetime - b.datetime;
   });
 }
@@ -955,15 +977,18 @@ function renderStatusBadge(match) {
 }
 
 function renderCenter(match, tz) {
-  if (match.status === "finished" && match.score) {
-    return `<span class="match-score">${match.score[0]} – ${match.score[1]}</span>`;
+  if (match.status === "finished") {
+    if (match.score) {
+      return `<span class="match-score">${match.score[0]} – ${match.score[1]}</span>`;
+    }
+    return `<span class="match-score match-score-pending">–</span>`;
   }
   if (match.status === "live") {
     return `<span class="match-vs">IN PLAY</span>`;
   }
   return `
     <span class="match-time">${formatTime(match.datetime, tz)}</span>
-    <span class="match-countdown" data-datetime="${match.datetime}">—</span>
+    <span class="match-countdown" data-kickoff="${match.datetime}">—</span>
   `;
 }
 
@@ -1151,35 +1176,6 @@ function updateStats() {
   els.statLiveCard?.classList.toggle("has-live", live > 0);
 }
 
-function formatCountdownShort(ms) {
-  if (ms <= 0) return "Starting soon";
-  const totalSec = Math.floor(ms / 1000);
-  const days = Math.floor(totalSec / 86400);
-  const hours = Math.floor((totalSec % 86400) / 3600);
-  const mins = Math.floor((totalSec % 3600) / 60);
-  const secs = totalSec % 60;
-  const parts = [];
-  if (days > 0) parts.push(`${days}d`);
-  if (days > 0 || hours > 0) parts.push(`${hours}h`);
-  parts.push(`${mins}m`);
-  parts.push(`${secs}s`);
-  return `in ${parts.join(" ")}`;
-}
-
-function updateMatchCountdowns() {
-  const now = Date.now();
-  document.querySelectorAll(".match-countdown").forEach((el) => {
-    const kickoff = Number(el.dataset.datetime) * 1000;
-    el.textContent = formatCountdownShort(kickoff - now);
-  });
-}
-
-function startCountdown() {
-  if (countdownInterval) clearInterval(countdownInterval);
-  updateMatchCountdowns();
-  countdownInterval = setInterval(updateMatchCountdowns, 1000);
-}
-
 function render() {
   renderStandings();
   const tz = els.timezoneSelect.value;
@@ -1315,9 +1311,9 @@ function boot() {
 
   loadSquads()
     .catch((err) => console.warn("Squads load skipped:", err))
-    .then(() => {
-      loadData();
-      startCountdown();
+    .then(async () => {
+      await loadData();
+      startMatchCountdowns();
     });
 }
 

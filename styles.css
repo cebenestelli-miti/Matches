@@ -1049,6 +1049,10 @@ button.top-team-chip:hover {
   color: var(--text);
 }
 
+.match-score-pending {
+  color: var(--text-muted);
+}
+
 .match-vs {
   font-size: 0.75rem;
   font-weight: 600;

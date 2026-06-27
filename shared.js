@@ -114,24 +114,37 @@ function formatDateHeading(unixSec, tz) {
 }
 
 function formatCountdownShort(ms) {
-  if (ms <= 0) return "Starting soon";
-  const totalSec = Math.floor(ms / 1000);
-  const days = Math.floor(totalSec / 86400);
-  const hours = Math.floor((totalSec % 86400) / 3600);
-  const mins = Math.floor((totalSec % 3600) / 60);
-  const secs = totalSec % 60;
-  const parts = [];
-  if (days > 0) parts.push(`${days}d`);
-  if (days > 0 || hours > 0) parts.push(`${hours}h`);
-  parts.push(`${mins}m`);
-  parts.push(`${secs}s`);
-  return `in ${parts.join(" ")}`;
+  if (ms > 0) {
+    const totalSec = Math.floor(ms / 1000);
+    const days = Math.floor(totalSec / 86400);
+    const hours = Math.floor((totalSec % 86400) / 3600);
+    const mins = Math.floor((totalSec % 3600) / 60);
+    const secs = totalSec % 60;
+    const parts = [];
+    if (days > 0) parts.push(`${days}d`);
+    if (days > 0 || hours > 0) parts.push(`${hours}h`);
+    parts.push(`${mins}m`);
+    parts.push(`${secs}s`);
+    return `in ${parts.join(" ")}`;
+  }
+  if (ms > -15 * 60 * 1000) return "Starting soon";
+  return "Kickoff passed";
+}
+
+function readCountdownKickoff(el) {
+  const raw = el.getAttribute("data-kickoff") ?? el.getAttribute("data-datetime");
+  const kickoff = Number(raw);
+  return Number.isFinite(kickoff) ? kickoff * 1000 : NaN;
 }
 
 function updateMatchCountdowns() {
   const now = Date.now();
   document.querySelectorAll(".match-countdown").forEach((el) => {
-    const kickoff = Number(el.dataset.datetime) * 1000;
+    const kickoff = readCountdownKickoff(el);
+    if (!Number.isFinite(kickoff)) {
+      el.textContent = "—";
+      return;
+    }
     el.textContent = formatCountdownShort(kickoff - now);
   });
 }

@@ -366,7 +366,7 @@ function renderCenter(match, tz) {
   }
   return `
     <span class="match-time">${formatTime(match.datetime, tz)}</span>
-    <span class="match-countdown" data-datetime="${match.datetime}">—</span>
+    <span class="match-countdown" data-kickoff="${match.datetime}">—</span>
   `;
 }
 

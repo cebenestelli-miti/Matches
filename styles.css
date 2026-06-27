@@ -351,6 +351,149 @@ button.top-team-chip:hover {
   padding: 1.25rem 1.25rem 3rem;
 }
 
+/* Standings */
+.standings-section {
+  margin-bottom: 1.25rem;
+}
+
+.standings-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 0.75rem;
+  margin-bottom: 0.75rem;
+  flex-wrap: wrap;
+}
+
+.standings-title {
+  margin: 0;
+  font-family: var(--font-display);
+  font-size: 1rem;
+  font-weight: 700;
+}
+
+.standings-hint {
+  margin: 0;
+  font-size: 0.72rem;
+  color: var(--text-muted);
+}
+
+.standings-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+  gap: 0.75rem;
+}
+
+.standings-group {
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: 0.65rem 0.75rem 0.75rem;
+}
+
+.standings-group-title {
+  margin: 0 0 0.45rem;
+  font-family: var(--font-display);
+  font-size: 0.82rem;
+  font-weight: 700;
+  color: var(--accent);
+}
+
+.standings-table-wrap {
+  overflow-x: auto;
+}
+
+.standings-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.74rem;
+  font-variant-numeric: tabular-nums;
+}
+
+.standings-table th,
+.standings-table td {
+  padding: 0.35rem 0.25rem;
+  border-bottom: 1px solid var(--border);
+  text-align: right;
+  white-space: nowrap;
+}
+
+.standings-table th {
+  font-size: 0.65rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--text-muted);
+}
+
+.standings-table tbody tr:last-child td {
+  border-bottom: none;
+}
+
+.standings-cell-team {
+  text-align: left !important;
+  max-width: 9rem;
+}
+
+.standings-team {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  min-width: 0;
+}
+
+.standings-flag {
+  flex-shrink: 0;
+  border-radius: 2px;
+  box-shadow: 0 0 0 1px rgba(15, 23, 42, 0.08);
+}
+
+.standings-team-name,
+.standings-team-link {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-weight: 600;
+  color: var(--text);
+}
+
+.standings-team-link {
+  border: none;
+  background: none;
+  padding: 0;
+  font: inherit;
+  cursor: pointer;
+  text-align: left;
+}
+
+.standings-team-link:hover {
+  color: var(--accent);
+  text-decoration: underline;
+}
+
+.standings-pts {
+  font-weight: 700;
+  color: var(--accent-2);
+}
+
+.standings-row-top {
+  background: rgba(5, 150, 105, 0.06);
+}
+
+.standings-row-third {
+  background: rgba(234, 179, 8, 0.05);
+}
+
+@media (max-width: 480px) {
+  .standings-hide-sm {
+    display: none;
+  }
+
+  .standings-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
 /* Stats bar */
 .stats-bar {
   display: grid;

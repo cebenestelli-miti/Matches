@@ -60,6 +60,14 @@
       </div>
     </section>
 
+    <section class="standings-section" aria-label="Group standings">
+      <div class="standings-head">
+        <h2 class="standings-title">Group standings</h2>
+        <p class="standings-hint">Top 2 qualify · 8 best third-place teams also advance</p>
+      </div>
+      <div id="standings-container" class="standings-grid"></div>
+    </section>
+
     <section class="controls" aria-label="Filters">
       <div class="controls-row">
         <div class="control-group control-search">
@@ -76,7 +84,7 @@
           <label for="status-filter">Status</label>
           <select id="status-filter">
             <option value="all">All matches</option>
-            <option value="upcoming" selected>Upcoming only</option>
+            <option value="upcoming" selected>Upcoming &amp; live</option>
             <option value="live">Live only</option>
             <option value="finished">Finished only</option>
           </select>

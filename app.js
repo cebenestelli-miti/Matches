@@ -54,6 +54,7 @@ const els = {
   squadFlag: $("#squad-flag"),
   squadBody: $("#squad-body"),
   squadClose: $("#squad-close"),
+  standingsContainer: $("#standings-container"),
 };
 
 /** @type {Array<{id:number,team1:string,team2:string,flag1?:string,flag2?:string,status:string,score:number[]|null,live_minute:number|null,datetime:number,group:string,round:string,ground:string}>} */
@@ -392,6 +393,153 @@ function restoreFilters() {
   if (groupByDate !== null) els.groupByDate.checked = groupByDate === "true";
 }
 
+function isGroupStageGroup(name) {
+  return /^Group [A-L]$/.test(name || "");
+}
+
+function matchPassesStatusFilter(match, status) {
+  if (status === "all") return true;
+  if (status === "upcoming") return match.status === "upcoming" || match.status === "live";
+  return match.status === status;
+}
+
+function computeStandings(matches) {
+  const groups = {};
+
+  for (const m of matches) {
+    if (!isGroupStageGroup(m.group)) continue;
+    if (!groups[m.group]) groups[m.group] = {};
+    for (const team of [m.team1, m.team2]) {
+      if (isPlaceholderTeam(team)) continue;
+      if (!groups[m.group][team]) {
+        groups[m.group][team] = { team, played: 0, w: 0, d: 0, l: 0, gf: 0, ga: 0, pts: 0 };
+      }
+    }
+  }
+
+  for (const m of matches) {
+    if (!isGroupStageGroup(m.group)) continue;
+    if (m.status !== "finished" || !m.score || m.score.length !== 2) continue;
+
+    const row1 = groups[m.group]?.[m.team1];
+    const row2 = groups[m.group]?.[m.team2];
+    if (!row1 || !row2) continue;
+
+    const [s1, s2] = m.score;
+    row1.played++;
+    row2.played++;
+    row1.gf += s1;
+    row1.ga += s2;
+    row2.gf += s2;
+    row2.ga += s1;
+
+    if (s1 > s2) {
+      row1.w++;
+      row1.pts += 3;
+      row2.l++;
+    } else if (s2 > s1) {
+      row2.w++;
+      row2.pts += 3;
+      row1.l++;
+    } else {
+      row1.d++;
+      row2.d++;
+      row1.pts++;
+      row2.pts++;
+    }
+  }
+
+  const sorted = {};
+  for (const [group, teams] of Object.entries(groups)) {
+    sorted[group] = Object.values(teams).sort((a, b) => {
+      const gdA = a.gf - a.ga;
+      const gdB = b.gf - b.ga;
+      if (b.pts !== a.pts) return b.pts - a.pts;
+      if (gdB !== gdA) return gdB - gdA;
+      if (b.gf !== a.gf) return b.gf - a.gf;
+      return a.team.localeCompare(b.team);
+    });
+  }
+
+  return sorted;
+}
+
+function renderStandingsTeamCell(team) {
+  const flag = flagUrlForTeam(team);
+  const flagHtml = flag
+    ? `<img class="standings-flag" src="${escapeAttr(flag)}" alt="" loading="lazy" width="20" height="15">`
+    : "";
+  const nameHtml = hasSquad(team)
+    ? `<button type="button" class="standings-team-link team-link" data-team="${escapeAttr(team)}">${escapeHtml(team)}</button>`
+    : `<span class="standings-team-name">${escapeHtml(team)}</span>`;
+  return `<span class="standings-team">${flagHtml}${nameHtml}</span>`;
+}
+
+function renderStandings() {
+  if (!els.standingsContainer) return;
+
+  const standings = computeStandings(allMatches);
+  let groupNames = Object.keys(standings).sort((a, b) => a.localeCompare(b));
+
+  const groupFilter = els.groupFilter.value;
+  if (isGroupStageGroup(groupFilter)) {
+    groupNames = groupNames.filter((g) => g === groupFilter);
+  }
+
+  if (!groupNames.length) {
+    els.standingsContainer.innerHTML = "";
+    els.standingsContainer.hidden = true;
+    return;
+  }
+
+  els.standingsContainer.hidden = false;
+  els.standingsContainer.innerHTML = groupNames
+    .map((group) => {
+      const rows = standings[group];
+      const body = rows
+        .map((row, i) => {
+          const gd = row.gf - row.ga;
+          const gdLabel = gd > 0 ? `+${gd}` : String(gd);
+          const rowClass = i < 2 ? "standings-row standings-row-top" : i === 2 ? "standings-row standings-row-third" : "standings-row";
+          return `
+            <tr class="${rowClass}">
+              <td class="standings-cell-team">${renderStandingsTeamCell(row.team)}</td>
+              <td>${row.played}</td>
+              <td class="standings-hide-sm">${row.w}</td>
+              <td class="standings-hide-sm">${row.d}</td>
+              <td class="standings-hide-sm">${row.l}</td>
+              <td>${gdLabel}</td>
+              <td class="standings-pts">${row.pts}</td>
+            </tr>
+          `;
+        })
+        .join("");
+
+      return `
+        <div class="standings-group">
+          <h3 class="standings-group-title">${escapeHtml(group)}</h3>
+          <div class="standings-table-wrap">
+            <table class="standings-table">
+              <thead>
+                <tr>
+                  <th scope="col">Team</th>
+                  <th scope="col" title="Played">P</th>
+                  <th scope="col" class="standings-hide-sm" title="Won">W</th>
+                  <th scope="col" class="standings-hide-sm" title="Drawn">D</th>
+                  <th scope="col" class="standings-hide-sm" title="Lost">L</th>
+                  <th scope="col" title="Goal difference">GD</th>
+                  <th scope="col" title="Points">Pts</th>
+                </tr>
+              </thead>
+              <tbody>${body}</tbody>
+            </table>
+          </div>
+        </div>
+      `;
+    })
+    .join("");
+}
+
 function getFilteredMatches() {
   const team = els.teamFilter.value;
   const status = els.statusFilter.value;
@@ -400,7 +548,7 @@ function getFilteredMatches() {
 
   return allMatches.filter((m) => {
     if (team && m.team1 !== team && m.team2 !== team) return false;
-    if (status !== "all" && m.status !== status) return false;
+    if (!matchPassesStatusFilter(m, status)) return false;
     if (group && m.group !== group && m.round !== group) return false;
     if (query) {
       const haystack = [m.team1, m.team2, m.group, m.round, m.ground].join(" ").toLowerCase();
@@ -565,7 +713,9 @@ function handleSquadClick(event) {
 }
 
 function initSquadModal() {
-  els.matchesContainer.addEventListener("click", handleSquadClick);
+  const onSquadClick = handleSquadClick;
+  els.matchesContainer.addEventListener("click", onSquadClick);
+  els.standingsContainer?.addEventListener("click", onSquadClick);
   els.squadClose.addEventListener("click", closeSquadModal);
   els.squadModal.querySelector("[data-close-squad]").addEventListener("click", closeSquadModal);
   document.addEventListener("keydown", (e) => {
@@ -657,6 +807,7 @@ function startCountdown() {
 }
 
 function render() {
+  renderStandings();
   const tz = els.timezoneSelect.value;
   const filtered = sortMatches(getFilteredMatches());
   const groupByDate = els.groupByDate.checked;

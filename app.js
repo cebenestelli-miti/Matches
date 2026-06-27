@@ -512,6 +512,222 @@ function getKnockoutMatches(matches, roundName) {
     .sort((a, b) => a.datetime - b.datetime);
 }
 
+const KNOCKOUT_NEXT_ROUND = {
+  "Round of 32": "Round of 16",
+  "Round of 16": "Quarter-final",
+  "Quarter-final": "Semi-final",
+  "Semi-final": "Final",
+};
+
+function sortStandingsRows(rows) {
+  return rows.sort((a, b) => {
+    const gdA = a.gf - a.ga;
+    const gdB = b.gf - b.ga;
+    if (b.pts !== a.pts) return b.pts - a.pts;
+    if (gdB !== gdA) return gdB - gdA;
+    if (b.gf !== a.gf) return b.gf - a.gf;
+    return a.team.localeCompare(b.team);
+  });
+}
+
+function getRemainingGroupMatches(group, matches) {
+  return matches.filter((m) => m.group === group && m.status !== "finished");
+}
+
+function getGroupTeams(group, matches) {
+  const set = new Set();
+  for (const m of matches) {
+    if (m.group !== group) continue;
+    for (const t of [m.team1, m.team2]) {
+      if (!isPlaceholderTeam(t)) set.add(t);
+    }
+  }
+  return [...set];
+}
+
+function buildGroupTable(group, teams, results) {
+  const rows = {};
+  for (const t of teams) {
+    rows[t] = { team: t, played: 0, w: 0, d: 0, l: 0, gf: 0, ga: 0, pts: 0 };
+  }
+  for (const { team1, team2, score } of results) {
+    if (!score) continue;
+    const row1 = rows[team1];
+    const row2 = rows[team2];
+    if (!row1 || !row2) continue;
+    const [s1, s2] = score;
+    row1.played++;
+    row2.played++;
+    row1.gf += s1;
+    row1.ga += s2;
+    row2.gf += s2;
+    row2.ga += s1;
+    if (s1 > s2) {
+      row1.w++;
+      row1.pts += 3;
+      row2.l++;
+    } else if (s2 > s1) {
+      row2.w++;
+      row2.pts += 3;
+      row1.l++;
+    } else {
+      row1.d++;
+      row2.d++;
+      row1.pts++;
+      row2.pts++;
+    }
+  }
+  return sortStandingsRows(Object.values(rows));
+}
+
+function collectFinishedGroupResults(group, matches) {
+  return matches
+    .filter((m) => m.group === group && m.status === "finished" && m.score)
+    .map((m) => ({ team1: m.team1, team2: m.team2, score: m.score }));
+}
+
+function enumerateGroupSimulations(group, matches, pinnedMatch, pinnedScore) {
+  const remaining = getRemainingGroupMatches(group, matches);
+  const finished = collectFinishedGroupResults(group, matches);
+  const others = pinnedMatch ? remaining.filter((m) => m.id !== pinnedMatch.id) : remaining;
+
+  function recurse(idx, simulated) {
+    if (idx >= others.length) {
+      const results = [...finished];
+      if (pinnedMatch && pinnedScore) {
+        results.push({ team1: pinnedMatch.team1, team2: pinnedMatch.team2, score: pinnedScore });
+      }
+      for (const s of simulated) results.push(s);
+      return [results];
+    }
+    const m = others[idx];
+    const out = [];
+    for (const score of [[1, 0], [1, 1], [0, 1]]) {
+      out.push(...recurse(idx + 1, [...simulated, { team1: m.team1, team2: m.team2, score }]));
+    }
+    return out;
+  }
+
+  return recurse(0, []);
+}
+
+function scoreForTeamResult(match, team, result) {
+  const home = match.team1 === team;
+  if (result === "draw") return [1, 1];
+  const teamWins = result === "win";
+  if (home) return teamWins ? [1, 0] : [0, 1];
+  return teamWins ? [0, 1] : [1, 0];
+}
+
+function teamTablePosition(table, team) {
+  return table.findIndex((r) => r.team === team);
+}
+
+function getGroupTeamSignificance(team, match, matches) {
+  if (!team || isPlaceholderTeam(team) || !isGroupStageGroup(match.group)) return null;
+
+  const group = match.group;
+  const teams = getGroupTeams(group, matches);
+  const remaining = getRemainingGroupMatches(group, matches);
+  if (!remaining.some((m) => m.id === match.id)) return null;
+
+  const simulate = (result) => {
+    const pinnedScore = scoreForTeamResult(match, team, result);
+    return enumerateGroupSimulations(group, matches, match, pinnedScore).map((results) =>
+      buildGroupTable(group, teams, results)
+    );
+  };
+
+  const simulateAllRemaining = () =>
+    enumerateGroupSimulations(group, matches, null, null).map((results) =>
+      buildGroupTable(group, teams, results)
+    );
+
+  const canTopTwo = (result) => simulate(result).some((table) => teamTablePosition(table, team) < 2);
+  const canFirst = (result) => simulate(result).some((table) => teamTablePosition(table, team) === 0);
+  const canThird = (result) => simulate(result).some((table) => teamTablePosition(table, team) === 2);
+
+  const clinchesTopTwo = (result) =>
+    simulate(result).every((table) => teamTablePosition(table, team) < 2);
+  const clinchesFirst = (result) =>
+    simulate(result).every((table) => teamTablePosition(table, team) === 0);
+
+  const clinchedFirst = simulateAllRemaining().every((table) => teamTablePosition(table, team) === 0);
+  const clinchedTopTwo = simulateAllRemaining().every((table) => teamTablePosition(table, team) < 2);
+
+  const outOfTopTwo = !canTopTwo("win") && !canTopTwo("draw") && !canTopTwo("loss");
+
+  if (clinchedFirst) return "Clinched group";
+
+  if (outOfTopTwo) {
+    if (canThird("win") && !canThird("draw") && !canThird("loss")) return "Must win for 3rd-place hopes";
+    if (canThird("win")) return "Win boosts Round of 32 chances";
+    return null;
+  }
+
+  const mustWin = canTopTwo("win") && !canTopTwo("draw") && !canTopTwo("loss");
+
+  if (mustWin && canFirst("win") && !canFirst("draw")) return "Must win for 1st place";
+  if (mustWin) return "Must win to advance";
+
+  if (clinchesFirst("win")) return "Win clinches 1st place";
+  if (clinchesTopTwo("win")) return "Win clinches Round of 32";
+  if (clinchesTopTwo("draw")) return "Draw clinches Round of 32";
+
+  if (canTopTwo("draw") && !canTopTwo("loss")) return "Draw enough to advance";
+
+  if (canFirst("win") && !clinchedTopTwo) return "Win for 1st place";
+  if (clinchedTopTwo && canFirst("win")) return "Win for 1st place";
+
+  return null;
+}
+
+function getKnockoutTeamSignificance(match) {
+  if (!isKnockoutRound(match.round)) return null;
+  if (match.round === "Final") return "Win to be champions";
+  if (match.round === "Match for third place") return "Win for 3rd place";
+  const next = KNOCKOUT_NEXT_ROUND[match.round];
+  return next ? `Win to reach ${next}` : null;
+}
+
+function getMatchSignificance(match, matches) {
+  if (match.status !== "upcoming" && match.status !== "live") {
+    return { team1: null, team2: null };
+  }
+
+  if (isGroupStageGroup(match.group)) {
+    return {
+      team1: getGroupTeamSignificance(match.team1, match, matches),
+      team2: getGroupTeamSignificance(match.team2, match, matches),
+    };
+  }
+
+  if (isKnockoutRound(match.round)) {
+    const label = getKnockoutTeamSignificance(match);
+    return {
+      team1: isPlaceholderTeam(match.team1) ? null : label,
+      team2: isPlaceholderTeam(match.team2) ? null : label,
+    };
+  }
+
+  return { team1: null, team2: null };
+}
+
+function renderTeamBlock(team, flagHtml, significance, away) {
+  const sigHtml = significance
+    ? `<span class="match-significance">${escapeHtml(significance)}</span>`
+    : "";
+  return `
+    <div class="team ${away ? "team-away" : "team-home"}">
+      ${flagHtml}
+      <div class="team-info">
+        ${renderTeamName(team)}
+        ${sigHtml}
+      </div>
+    </div>
+  `;
+}
+
 function computeRoundStandings(matches, groupStandings) {
   const teams = {};
 
@@ -893,6 +1109,8 @@ function renderMatchCard(match, tz) {
     ? `<img class="team-flag" src="${escapeAttr(match.flag2)}" alt="" loading="lazy" width="32" height="22">`
     : "";
 
+  const significance = getMatchSignificance(match, allMatches);
+
   const cardClass = [
     "match-card",
     match.status === "live" ? "is-live" : "",
@@ -905,19 +1123,13 @@ function renderMatchCard(match, tz) {
 
   return `
     <article class="${cardClass}" data-id="${match.id}">
-      <div class="team team-home">
-        ${flag1}
-        ${renderTeamName(match.team1)}
-      </div>
+      ${renderTeamBlock(match.team1, flag1, significance.team1, false)}
       <div class="match-center">
         ${renderCenter(match, tz)}
         ${renderStatusBadge(match)}
         ${match.status === "live" ? `<span class="match-vs">${dateLabel}</span>` : ""}
       </div>
-      <div class="team team-away">
-        ${flag2}
-        ${renderTeamName(match.team2)}
-      </div>
+      ${renderTeamBlock(match.team2, flag2, significance.team2, true)}
       <div class="match-meta">
         ${match.group ? `<span class="group-tag">${escapeHtml(match.group)}</span>` : ""}
         ${match.round ? `<span>${escapeHtml(match.round)}</span>` : ""}

@@ -945,6 +945,29 @@ button.top-team-chip:hover {
   min-width: 0;
 }
 
+.team-info {
+  display: flex;
+  flex-direction: column;
+  gap: 0.12rem;
+  min-width: 0;
+}
+
+.team-away .team-info {
+  align-items: flex-end;
+}
+
+.match-significance {
+  font-size: 0.62rem;
+  font-weight: 600;
+  line-height: 1.25;
+  color: var(--accent);
+  text-wrap: balance;
+}
+
+.team-away .match-significance {
+  text-align: right;
+}
+
 .team-away {
   flex-direction: row-reverse;
   text-align: right;

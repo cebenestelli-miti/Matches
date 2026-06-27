@@ -369,15 +369,9 @@ button.top-team-chip:hover {
 }
 
 .stage-dropdown-summary {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 0.75rem;
-  padding: 0.85rem 1rem;
   cursor: pointer;
   list-style: none;
   user-select: none;
-  transition: background 0.15s;
 }
 
 .stage-dropdown-summary::-webkit-details-marker {
@@ -386,15 +380,33 @@ button.top-team-chip:hover {
 
 .stage-dropdown-summary::marker {
   content: "";
+  display: none;
 }
 
-.stage-dropdown[open] > .stage-dropdown-summary {
+.stage-dropdown-summary-inner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  padding: 0.85rem 1rem;
+  transition: background 0.15s;
+}
+
+.stage-dropdown[open] > .stage-dropdown-summary .stage-dropdown-summary-inner {
   border-bottom: 1px solid var(--border);
   background: rgba(5, 150, 105, 0.04);
 }
 
-.stage-dropdown-summary:hover {
+.stage-dropdown-summary:hover .stage-dropdown-summary-inner {
   background: var(--bg-card-hover);
+}
+
+.stage-dropdown[open] > .stage-dropdown-summary:hover .stage-dropdown-summary-inner {
+  background: rgba(5, 150, 105, 0.06);
+}
+
+.stage-dropdown:not([open]) > .stage-dropdown-body {
+  display: none;
 }
 
 .stage-dropdown-label {

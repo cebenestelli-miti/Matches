@@ -537,11 +537,13 @@ function renderStageDropdown(title, meta, innerHtml) {
   return `
     <details class="stage-dropdown">
       <summary class="stage-dropdown-summary">
-        <span class="stage-dropdown-label">
-          <span class="stage-dropdown-title">${escapeHtml(title)}</span>
-          ${meta ? `<span class="stage-dropdown-meta">${escapeHtml(meta)}</span>` : ""}
+        <span class="stage-dropdown-summary-inner">
+          <span class="stage-dropdown-label">
+            <span class="stage-dropdown-title">${escapeHtml(title)}</span>
+            ${meta ? `<span class="stage-dropdown-meta">${escapeHtml(meta)}</span>` : ""}
+          </span>
+          <span class="stage-caret" aria-hidden="true">▾</span>
         </span>
-        <span class="stage-caret" aria-hidden="true">▾</span>
       </summary>
       <div class="stage-dropdown-body">${innerHtml}</div>
     </details>

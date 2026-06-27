@@ -904,10 +904,9 @@ function renderStandings(focusStage = null) {
   const groupStandings = computeStandings(allMatches);
   let groupFilter = els.groupFilter.value;
 
-  if (focusStage && isGroupStageGroup(focusStage)) {
+  // Match-card navigation: show all standings sections, only open/highlight the target.
+  if (focusStage) {
     groupFilter = "";
-  } else if (focusStage && isKnockoutRound(focusStage)) {
-    groupFilter = focusStage;
   }
 
   let groupNames = Object.keys(groupStandings).sort((a, b) => a.localeCompare(b));

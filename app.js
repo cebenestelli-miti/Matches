@@ -65,8 +65,7 @@ const els = {
   squadBody: $("#squad-body"),
   squadClose: $("#squad-close"),
   standingsContainer: $("#standings-container"),
-  standingsPanel: $("#standings-panel"),
-  standingsToggle: $("#standings-toggle"),
+  standingsDetails: $("#standings-details"),
 };
 
 /** @type {Array<{id:number,team1:string,team2:string,flag1?:string,flag2?:string,status:string,score:number[]|null,live_minute:number|null,datetime:number,group:string,round:string,ground:string}>} */
@@ -649,26 +648,14 @@ function renderStandings() {
   els.standingsContainer.innerHTML = groupHtml + knockoutHtml;
 }
 
-function setStandingsOpen(open) {
-  const section = els.standingsToggle?.closest(".standings-section");
-  if (!section || !els.standingsPanel || !els.standingsToggle) return;
-
-  section.classList.toggle("is-open", open);
-  els.standingsPanel.hidden = !open;
-  els.standingsToggle.setAttribute("aria-expanded", String(open));
-  localStorage.setItem(STORAGE_KEYS.standingsOpen, String(open));
-}
-
 function initStandingsToggle() {
-  if (!els.standingsToggle || !els.standingsPanel) return;
+  if (!els.standingsDetails) return;
 
   const saved = localStorage.getItem(STORAGE_KEYS.standingsOpen);
-  const open = saved === "true";
-  setStandingsOpen(open);
+  if (saved === "true") els.standingsDetails.open = true;
 
-  els.standingsToggle.addEventListener("click", () => {
-    const isOpen = els.standingsToggle.getAttribute("aria-expanded") === "true";
-    setStandingsOpen(!isOpen);
+  els.standingsDetails.addEventListener("toggle", () => {
+    localStorage.setItem(STORAGE_KEYS.standingsOpen, String(els.standingsDetails.open));
   });
 }
 

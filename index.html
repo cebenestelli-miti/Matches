@@ -60,18 +60,19 @@
       </div>
     </section>
 
-    <section class="standings-section" aria-label="Standings and knockout">
-      <button type="button" class="standings-toggle" id="standings-toggle" aria-expanded="false" aria-controls="standings-panel">
+    <details class="standings-section" id="standings-details">
+      <summary class="standings-toggle">
+        <span class="standings-toggle-icon" aria-hidden="true">📊</span>
         <span class="standings-toggle-text">
           <span class="standings-title">Standings &amp; knockout</span>
           <span class="standings-hint">Groups · Round of 32 through Final</span>
         </span>
         <span class="standings-caret" aria-hidden="true">▾</span>
-      </button>
-      <div id="standings-panel" class="standings-panel" hidden>
+      </summary>
+      <div class="standings-panel">
         <div id="standings-container" class="standings-content"></div>
       </div>
-    </section>
+    </details>
 
     <section class="controls" aria-label="Filters">
       <div class="controls-row">

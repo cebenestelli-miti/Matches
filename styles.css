@@ -351,32 +351,53 @@ button.top-team-chip:hover {
   padding: 1.25rem 1.25rem 3rem;
 }
 
-/* Standings */
+/* Standings (collapsible, matches .controls card) */
 .standings-section {
-  margin-bottom: 1.25rem;
+  margin-bottom: 0.75rem;
   background: var(--bg-card);
   border: 1px solid var(--border);
-  border-radius: var(--radius-sm);
+  border-radius: var(--radius);
+  backdrop-filter: blur(12px);
+  box-shadow: var(--shadow);
   overflow: hidden;
 }
 
 .standings-toggle {
   display: flex;
   align-items: center;
-  justify-content: space-between;
   gap: 0.75rem;
-  width: 100%;
-  padding: 0.85rem 1rem;
-  border: none;
-  background: var(--bg-card);
+  padding: 1rem;
   cursor: pointer;
-  font-family: inherit;
-  text-align: left;
+  list-style: none;
+  user-select: none;
   transition: background 0.15s;
+}
+
+.standings-toggle::-webkit-details-marker {
+  display: none;
+}
+
+.standings-toggle::marker {
+  content: "";
+}
+
+.standings-section[open] > .standings-toggle {
+  border-bottom: 1px solid var(--border);
+  background: rgba(5, 150, 105, 0.04);
 }
 
 .standings-toggle:hover {
   background: var(--bg-card-hover);
+}
+
+.standings-section[open] > .standings-toggle:hover {
+  background: rgba(5, 150, 105, 0.06);
+}
+
+.standings-toggle-icon {
+  flex-shrink: 0;
+  font-size: 1.15rem;
+  line-height: 1;
 }
 
 .standings-toggle-text {
@@ -384,22 +405,23 @@ button.top-team-chip:hover {
   flex-direction: column;
   gap: 0.15rem;
   min-width: 0;
+  flex: 1;
 }
 
 .standings-caret {
   flex-shrink: 0;
-  font-size: 0.85rem;
-  color: var(--text-muted);
-  transition: transform 0.2s;
+  font-size: 0.75rem;
+  color: var(--accent);
+  font-weight: 700;
+  transition: transform 0.2s ease;
 }
 
-.standings-section.is-open .standings-caret {
+.standings-section[open] .standings-caret {
   transform: rotate(180deg);
 }
 
 .standings-panel {
-  border-top: 1px solid var(--border);
-  padding: 0.85rem 1rem 1rem;
+  padding: 1rem;
 }
 
 .standings-content {
@@ -449,7 +471,7 @@ button.top-team-chip:hover {
 }
 
 .standings-group {
-  background: var(--bg-card);
+  background: var(--bg-deep);
   border: 1px solid var(--border);
   border-radius: var(--radius-sm);
   padding: 0.65rem 0.75rem 0.75rem;

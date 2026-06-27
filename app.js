@@ -804,9 +804,10 @@ function computeRoundStandings(matches, groupStandings) {
   });
 }
 
-function renderStageDropdown(title, meta, innerHtml) {
+function renderStageDropdown(title, meta, innerHtml, stageKey) {
+  const stage = stageKey ?? title;
   return `
-    <details class="stage-dropdown">
+    <details class="stage-dropdown" data-stage="${escapeAttr(stage)}">
       <summary class="stage-dropdown-summary">
         <span class="stage-dropdown-summary-inner">
           <span class="stage-dropdown-label">
@@ -846,7 +847,7 @@ function renderGroupStandingsTable(rows, { highlightTop = true } = {}) {
           i < 2 ? "standings-row standings-row-top" : i === 2 ? "standings-row standings-row-third" : "standings-row";
       }
       return `
-        <tr class="${rowClass}">
+        <tr class="${rowClass}" data-team="${escapeAttr(row.team)}">
           <td class="standings-cell-team">${renderStandingsTeamCell(row.team)}</td>
           <td>${row.played}</td>
           <td class="standings-hide-sm">${row.w}</td>
@@ -881,7 +882,7 @@ function renderGroupStandingsTable(rows, { highlightTop = true } = {}) {
 
 function renderGroupStandingsCard(group, rows) {
   return `
-    <div class="standings-group">
+    <div class="standings-group" data-group="${escapeAttr(group)}">
       <h3 class="standings-group-title">${escapeHtml(group)}</h3>
       ${renderGroupStandingsTable(rows)}
     </div>
@@ -897,11 +898,18 @@ function renderGroupStageSection(groupNames, groupStandings) {
   );
 }
 
-function renderStandings() {
+function renderStandings(focusStage = null) {
   if (!els.standingsContainer) return;
 
   const groupStandings = computeStandings(allMatches);
-  const groupFilter = els.groupFilter.value;
+  let groupFilter = els.groupFilter.value;
+
+  if (focusStage && isGroupStageGroup(focusStage)) {
+    groupFilter = "";
+  } else if (focusStage && isKnockoutRound(focusStage)) {
+    groupFilter = focusStage;
+  }
+
   let groupNames = Object.keys(groupStandings).sort((a, b) => a.localeCompare(b));
   let knockoutRounds = KNOCKOUT_ROUNDS.filter((r) => getKnockoutMatches(allMatches, r).length > 0);
 
@@ -1108,6 +1116,89 @@ function closeSquadModal() {
   document.body.classList.remove("modal-open");
 }
 
+function renderStageLink(label, stageName, team1, team2) {
+  return `<button type="button" class="group-tag stage-link" data-stage="${escapeAttr(stageName)}" data-team1="${escapeAttr(team1 || "")}" data-team2="${escapeAttr(team2 || "")}">${escapeHtml(label)}</button>`;
+}
+
+function ensureStandingsForStage(stageName) {
+  renderStandings(stageName);
+}
+
+function clearStandingsFlash() {
+  els.standingsContainer?.querySelectorAll(".standings-flash, .standings-row-flash").forEach((el) => {
+    el.classList.remove("standings-flash", "standings-row-flash");
+  });
+}
+
+function applyStandingsHighlight(stageName, teams) {
+  const container = els.standingsContainer;
+  if (!container) return;
+
+  clearStandingsFlash();
+  container.scrollIntoView({ behavior: "smooth", block: "start" });
+
+  const groupStandings = computeStandings(allMatches);
+  const resolvedTeams = teams
+    .map((t) => resolveGroupPosPlaceholder(t, groupStandings))
+    .filter((t) => t && !isPlaceholderTeam(t));
+
+  let highlightTarget = null;
+
+  if (isGroupStageGroup(stageName)) {
+    const groupStageDropdown = [...container.querySelectorAll("details.stage-dropdown")].find(
+      (el) => el.dataset.stage === "Group stage"
+    );
+    if (groupStageDropdown) {
+      groupStageDropdown.open = true;
+      highlightTarget = [...groupStageDropdown.querySelectorAll(".standings-group")].find(
+        (el) => el.dataset.group === stageName
+      );
+    }
+  } else {
+    const roundDropdown = [...container.querySelectorAll("details.stage-dropdown")].find(
+      (el) => el.dataset.stage === stageName
+    );
+    if (roundDropdown) {
+      roundDropdown.open = true;
+      highlightTarget = roundDropdown;
+    }
+  }
+
+  if (highlightTarget) {
+    highlightTarget.classList.add("standings-flash");
+    setTimeout(() => {
+      highlightTarget.scrollIntoView({ behavior: "smooth", block: "center" });
+    }, 120);
+  }
+
+  for (const team of resolvedTeams) {
+    for (const row of container.querySelectorAll(".standings-row")) {
+      if (row.dataset.team === team) {
+        row.classList.add("standings-row-flash");
+      }
+    }
+  }
+
+  setTimeout(clearStandingsFlash, 2600);
+}
+
+function navigateToStandings(stageName, teams) {
+  ensureStandingsForStage(stageName);
+  requestAnimationFrame(() => {
+    applyStandingsHighlight(stageName, teams);
+  });
+}
+
+function handleMatchContainerClick(event) {
+  const stageBtn = event.target.closest(".stage-link");
+  if (stageBtn) {
+    event.preventDefault();
+    navigateToStandings(stageBtn.dataset.stage, [stageBtn.dataset.team1, stageBtn.dataset.team2]);
+    return;
+  }
+  handleSquadClick(event);
+}
+
 function handleSquadClick(event) {
   const btn = event.target.closest(".team-link");
   if (!btn) return;
@@ -1116,9 +1207,8 @@ function handleSquadClick(event) {
 }
 
 function initSquadModal() {
-  const onSquadClick = handleSquadClick;
-  els.matchesContainer.addEventListener("click", onSquadClick);
-  els.standingsContainer?.addEventListener("click", onSquadClick);
+  els.matchesContainer.addEventListener("click", handleMatchContainerClick);
+  els.standingsContainer?.addEventListener("click", handleSquadClick);
   els.squadClose.addEventListener("click", closeSquadModal);
   els.squadModal.querySelector("[data-close-squad]").addEventListener("click", closeSquadModal);
   document.addEventListener("keydown", (e) => {
@@ -1156,8 +1246,8 @@ function renderMatchCard(match, tz) {
       </div>
       ${renderTeamBlock(match.team2, flag2, significance.team2, true)}
       <div class="match-meta">
-        ${match.group ? `<span class="group-tag">${escapeHtml(match.group)}</span>` : ""}
-        ${match.round ? `<span>${escapeHtml(match.round)}</span>` : ""}
+        ${match.group ? renderStageLink(match.group, match.group, match.team1, match.team2) : ""}
+        ${match.round && isKnockoutRound(match.round) ? renderStageLink(match.round, match.round, match.team1, match.team2) : match.round ? `<span>${escapeHtml(match.round)}</span>` : ""}
         ${match.ground ? `<span>📍 ${escapeHtml(match.ground)}</span>` : ""}
       </div>
     </article>

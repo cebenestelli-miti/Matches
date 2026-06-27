@@ -1123,6 +1123,59 @@ button.top-team-chip:hover {
   font-weight: 600;
 }
 
+button.group-tag.stage-link {
+  border: none;
+  background: none;
+  padding: 0;
+  font: inherit;
+  cursor: pointer;
+  text-decoration: none;
+  transition: color 0.15s, opacity 0.15s;
+}
+
+button.group-tag.stage-link:hover {
+  color: var(--accent);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+button.group-tag.stage-link:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+  border-radius: 3px;
+}
+
+@keyframes standings-block-flash {
+  0%,
+  100% {
+    box-shadow: none;
+  }
+  50% {
+    box-shadow: 0 0 0 3px rgba(5, 150, 105, 0.5);
+    background: rgba(5, 150, 105, 0.1);
+  }
+}
+
+@keyframes standings-row-flash {
+  0%,
+  100% {
+    background: transparent;
+  }
+  50% {
+    background: rgba(5, 150, 105, 0.22);
+  }
+}
+
+.standings-group.standings-flash,
+details.stage-dropdown.standings-flash {
+  animation: standings-block-flash 0.85s ease 2;
+  border-radius: var(--radius-sm);
+}
+
+.standings-row.standings-row-flash {
+  animation: standings-row-flash 0.85s ease 2;
+}
+
 /* Footer */
 .site-footer {
   max-width: var(--max-w);

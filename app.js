@@ -296,10 +296,19 @@ function loadEmbeddedMatches() {
   };
 }
 
-async function fetchJson(url) {
-  const res = await fetch(url, { cache: "no-store" });
-  if (!res.ok) throw new Error(`Request failed (${res.status})`);
-  return res.json();
+async function fetchJson(url, timeoutMs = 8000) {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
+  try {
+    const res = await fetch(url, { cache: "no-store", signal: controller.signal });
+    if (!res.ok) throw new Error(`Request failed (${res.status})`);
+    return res.json();
+  } catch (err) {
+    if (err.name === "AbortError") throw new Error("Request timed out");
+    throw err;
+  } finally {
+    clearTimeout(timer);
+  }
 }
 
 async function fetchMatches() {
@@ -307,20 +316,7 @@ async function fetchMatches() {
 
   if (!IS_FILE_PROTOCOL) {
     try {
-      const data = await fetchJson(API_PRIMARY);
-      if (!data.ok || !Array.isArray(data.matches)) throw new Error("Invalid API response");
-      return {
-        matches: data.matches.map(normalizePrimaryMatch),
-        source: "wcup2026.org",
-        updated: data.updated,
-      };
-    } catch (err) {
-      errors.push(`API: ${err.message}`);
-      console.warn("Primary API failed:", err);
-    }
-
-    try {
-      const data = await fetchJson(LOCAL_JSON);
+      const data = await fetchJson(LOCAL_JSON, 5000);
       if (data.ok && Array.isArray(data.matches)) {
         return {
           matches: data.matches.map(normalizePrimaryMatch),
@@ -334,7 +330,20 @@ async function fetchMatches() {
     }
 
     try {
-      const data = await fetchJson(API_FALLBACK);
+      const data = await fetchJson(API_PRIMARY, 8000);
+      if (!data.ok || !Array.isArray(data.matches)) throw new Error("Invalid API response");
+      return {
+        matches: data.matches.map(normalizePrimaryMatch),
+        source: "wcup2026.org",
+        updated: data.updated,
+      };
+    } catch (err) {
+      errors.push(`API: ${err.message}`);
+      console.warn("Primary API failed:", err);
+    }
+
+    try {
+      const data = await fetchJson(API_FALLBACK, 8000);
       return {
         matches: normalizeFallbackMatches(data),
         source: "openfootball",
@@ -519,9 +528,6 @@ function renderKnockoutScore(match) {
 function renderKnockoutTeam(name, groupStandings) {
   const resolved = resolveGroupPosPlaceholder(name, groupStandings);
   if (!isPlaceholderTeam(resolved)) {
-    if (hasSquad(resolved)) {
-      return `<button type="button" class="standings-team-link team-link knockout-team-btn" data-team="${escapeAttr(resolved)}">${renderStandingsTeamCell(resolved)}</button>`;
-    }
     return renderStandingsTeamCell(resolved);
   }
   return `<span class="knockout-placeholder">${escapeHtml(name)}</span>`;
@@ -742,7 +748,10 @@ async function loadSquads() {
   }
   if (!IS_FILE_PROTOCOL) {
     try {
-      const res = await fetch(LOCAL_SQUADS, { cache: "no-store" });
+      const controller = new AbortController();
+      const timer = setTimeout(() => controller.abort(), 5000);
+      const res = await fetch(LOCAL_SQUADS, { cache: "no-store", signal: controller.signal });
+      clearTimeout(timer);
       if (res.ok) {
         const data = await res.json();
         if (data.teams) squadTeams = data.teams;
@@ -1023,7 +1032,12 @@ async function loadData() {
     populateGroupFilter();
     updateStats();
     setMeta(source, updated);
-    render();
+    try {
+      render();
+    } catch (renderErr) {
+      console.error("Render failed:", renderErr);
+      showError(renderErr.message || "Could not display page content.");
+    }
   } catch (err) {
     showError(err.message || "Failed to load matches.");
     els.matchesContainer.innerHTML = "";
@@ -1065,10 +1079,12 @@ function boot() {
   els.groupByDate.addEventListener("change", saveAndRender);
   els.searchInput.addEventListener("input", debounce(render, 200));
 
-  loadSquads().then(() => {
-    loadData();
-    startCountdown();
-  });
+  loadSquads()
+    .catch((err) => console.warn("Squads load skipped:", err))
+    .then(() => {
+      loadData();
+      startCountdown();
+    });
 }
 
 if (document.readyState === "loading") {

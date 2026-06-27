@@ -512,25 +512,64 @@ function getKnockoutMatches(matches, roundName) {
     .sort((a, b) => a.datetime - b.datetime);
 }
 
-function renderKnockoutScore(match) {
-  if (match.status === "finished" && match.score) {
-    return `<span class="knockout-score">${match.score[0]} – ${match.score[1]}</span>`;
-  }
-  if (match.status === "live") {
-    if (match.score) {
-      return `<span class="knockout-score knockout-score-live">${match.score[0]} – ${match.score[1]}</span>`;
-    }
-    return `<span class="knockout-score knockout-score-live">Live</span>`;
-  }
-  return `<span class="knockout-score knockout-score-tbd">–</span>`;
-}
+function computeRoundStandings(matches, groupStandings) {
+  const teams = {};
 
-function renderKnockoutTeam(name, groupStandings) {
-  const resolved = resolveGroupPosPlaceholder(name, groupStandings);
-  if (!isPlaceholderTeam(resolved)) {
-    return renderStandingsTeamCell(resolved);
+  const ensureTeam = (name) => {
+    const resolved = resolveGroupPosPlaceholder(name, groupStandings);
+    if (isPlaceholderTeam(resolved)) return null;
+    if (!teams[resolved]) {
+      teams[resolved] = { team: resolved, played: 0, w: 0, d: 0, l: 0, gf: 0, ga: 0, pts: 0 };
+    }
+    return teams[resolved];
+  };
+
+  for (const m of matches) {
+    ensureTeam(m.team1);
+    ensureTeam(m.team2);
   }
-  return `<span class="knockout-placeholder">${escapeHtml(name)}</span>`;
+
+  for (const m of matches) {
+    if ((m.status !== "finished" && m.status !== "live") || !m.score || m.score.length !== 2) continue;
+
+    const t1 = resolveGroupPosPlaceholder(m.team1, groupStandings);
+    const t2 = resolveGroupPosPlaceholder(m.team2, groupStandings);
+    const row1 = teams[t1];
+    const row2 = teams[t2];
+    if (!row1 || !row2) continue;
+
+    const [s1, s2] = m.score;
+    row1.played++;
+    row2.played++;
+    row1.gf += s1;
+    row1.ga += s2;
+    row2.gf += s2;
+    row2.ga += s1;
+
+    if (s1 > s2) {
+      row1.w++;
+      row1.pts += 3;
+      row2.l++;
+    } else if (s2 > s1) {
+      row2.w++;
+      row2.pts += 3;
+      row1.l++;
+    } else {
+      row1.d++;
+      row2.d++;
+      row1.pts++;
+      row2.pts++;
+    }
+  }
+
+  return Object.values(teams).sort((a, b) => {
+    const gdA = a.gf - a.ga;
+    const gdB = b.gf - b.ga;
+    if (b.pts !== a.pts) return b.pts - a.pts;
+    if (gdB !== gdA) return gdB - gdA;
+    if (b.gf !== a.gf) return b.gf - a.gf;
+    return a.team.localeCompare(b.team);
+  });
 }
 
 function renderStageDropdown(title, meta, innerHtml) {
@@ -550,63 +589,30 @@ function renderStageDropdown(title, meta, innerHtml) {
   `;
 }
 
-function renderKnockoutFixtureMeta(match, tz) {
-  if (match.status === "live") {
-    return `<span class="fixture-badge fixture-live">Live</span>`;
-  }
-  if (match.status === "finished") {
-    return `<span class="fixture-badge fixture-finished">FT</span>`;
-  }
-  return `<span class="fixture-badge fixture-upcoming">${escapeHtml(formatTime(match.datetime, tz))}</span>`;
+function renderKnockoutRoundDropdown(roundName, matches, groupStandings) {
+  const rows = computeRoundStandings(matches, groupStandings);
+  const played = matches.filter((m) => m.status === "finished" || m.status === "live").length;
+  const meta = rows.length
+    ? `${rows.length} team${rows.length !== 1 ? "s" : ""}${played ? ` · ${played} played` : ""}`
+    : "TBD";
+
+  const inner = rows.length
+    ? renderGroupStandingsTable(rows, { highlightTop: false })
+    : `<p class="standings-empty">Teams TBD</p>`;
+
+  return renderStageDropdown(roundName, meta, inner);
 }
 
-function renderKnockoutFixtures(matches, groupStandings, tz) {
-  const items = matches
-    .map((m) => {
-      const rowClass = [
-        "knockout-fixture",
-        m.status === "live" ? "is-live" : "",
-        m.status === "finished" ? "is-finished" : "",
-      ]
-        .filter(Boolean)
-        .join(" ");
-
-      return `
-        <li class="${rowClass}">
-          <div class="knockout-fixture-teams">
-            <span class="knockout-fixture-team">${renderKnockoutTeam(m.team1, groupStandings)}</span>
-            <span class="knockout-fixture-score">${renderKnockoutScore(m)}</span>
-            <span class="knockout-fixture-team">${renderKnockoutTeam(m.team2, groupStandings)}</span>
-          </div>
-          ${renderKnockoutFixtureMeta(m, tz)}
-        </li>
-      `;
-    })
-    .join("");
-
-  return `<ol class="knockout-fixtures">${items}</ol>`;
-}
-
-function renderKnockoutRoundDropdown(roundName, matches, groupStandings, tz) {
-  const finished = matches.filter((m) => m.status === "finished").length;
-  const live = matches.filter((m) => m.status === "live").length;
-  const metaParts = [`${matches.length} fixtures`];
-  if (live) metaParts.push(`${live} live`);
-  else if (finished) metaParts.push(`${finished} played`);
-
-  return renderStageDropdown(
-    roundName,
-    metaParts.join(" · "),
-    renderKnockoutFixtures(matches, groupStandings, tz)
-  );
-}
-
-function renderGroupStandingsTable(rows) {
+function renderGroupStandingsTable(rows, { highlightTop = true } = {}) {
   const body = rows
     .map((row, i) => {
       const gd = row.gf - row.ga;
       const gdLabel = gd > 0 ? `+${gd}` : String(gd);
-      const rowClass = i < 2 ? "standings-row standings-row-top" : i === 2 ? "standings-row standings-row-third" : "standings-row";
+      let rowClass = "standings-row";
+      if (highlightTop) {
+        rowClass =
+          i < 2 ? "standings-row standings-row-top" : i === 2 ? "standings-row standings-row-third" : "standings-row";
+      }
       return `
         <tr class="${rowClass}">
           <td class="standings-cell-team">${renderStandingsTeamCell(row.team)}</td>
@@ -641,16 +647,27 @@ function renderGroupStandingsTable(rows) {
   `;
 }
 
-function renderGroupStageDropdown(group, rows) {
-  const leader = rows[0];
-  const meta = leader ? `${leader.team} · ${leader.pts} pts` : "";
-  return renderStageDropdown(group, meta, renderGroupStandingsTable(rows));
+function renderGroupStandingsCard(group, rows) {
+  return `
+    <div class="standings-group">
+      <h3 class="standings-group-title">${escapeHtml(group)}</h3>
+      ${renderGroupStandingsTable(rows)}
+    </div>
+  `;
+}
+
+function renderGroupStageSection(groupNames, groupStandings) {
+  const grid = groupNames.map((g) => renderGroupStandingsCard(g, groupStandings[g])).join("");
+  return renderStageDropdown(
+    "Group stage",
+    `${groupNames.length} group${groupNames.length !== 1 ? "s" : ""}`,
+    `<div class="standings-grid">${grid}</div>`
+  );
 }
 
 function renderStandings() {
   if (!els.standingsContainer) return;
 
-  const tz = els.timezoneSelect?.value || "UTC";
   const groupStandings = computeStandings(allMatches);
   const groupFilter = els.groupFilter.value;
   let groupNames = Object.keys(groupStandings).sort((a, b) => a.localeCompare(b));
@@ -664,12 +681,15 @@ function renderStandings() {
     knockoutRounds = knockoutRounds.filter((r) => r === groupFilter);
   }
 
-  const stages = [
-    ...groupNames.map((g) => renderGroupStageDropdown(g, groupStandings[g])),
+  const stages = [];
+  if (groupNames.length) {
+    stages.push(renderGroupStageSection(groupNames, groupStandings));
+  }
+  stages.push(
     ...knockoutRounds.map((r) =>
-      renderKnockoutRoundDropdown(r, getKnockoutMatches(allMatches, r), groupStandings, tz)
-    ),
-  ];
+      renderKnockoutRoundDropdown(r, getKnockoutMatches(allMatches, r), groupStandings)
+    )
+  );
 
   if (!stages.length) {
     els.standingsContainer.innerHTML = `<p class="standings-empty">No standings for the selected filter.</p>`;

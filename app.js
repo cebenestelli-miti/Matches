@@ -9,7 +9,17 @@ const STORAGE_KEYS = {
   status: "wc2026_status",
   group: "wc2026_group",
   groupByDate: "wc2026_group_by_date",
+  standingsOpen: "wc2026_standings_open",
 };
+
+const KNOCKOUT_ROUNDS = [
+  "Round of 32",
+  "Round of 16",
+  "Quarter-final",
+  "Semi-final",
+  "Match for third place",
+  "Final",
+];
 
 const LOCAL_SQUADS = "data/squads.json";
 
@@ -55,6 +65,8 @@ const els = {
   squadBody: $("#squad-body"),
   squadClose: $("#squad-close"),
   standingsContainer: $("#standings-container"),
+  standingsPanel: $("#standings-panel"),
+  standingsToggle: $("#standings-toggle"),
 };
 
 /** @type {Array<{id:number,team1:string,team2:string,flag1?:string,flag2?:string,status:string,score:number[]|null,live_minute:number|null,datetime:number,group:string,round:string,ground:string}>} */
@@ -475,69 +487,189 @@ function renderStandingsTeamCell(team) {
   return `<span class="standings-team">${flagHtml}${nameHtml}</span>`;
 }
 
-function renderStandings() {
-  if (!els.standingsContainer) return;
+function resolveGroupPosPlaceholder(name, groupStandings) {
+  const m = String(name || "").match(/^([12])([A-L])$/);
+  if (!m) return name;
+  const idx = m[1] === "1" ? 0 : 1;
+  const group = `Group ${m[2]}`;
+  const row = groupStandings[group]?.[idx];
+  return row?.team || name;
+}
 
-  const standings = computeStandings(allMatches);
-  let groupNames = Object.keys(standings).sort((a, b) => a.localeCompare(b));
+function isKnockoutRound(name) {
+  return KNOCKOUT_ROUNDS.includes(name);
+}
 
-  const groupFilter = els.groupFilter.value;
-  if (isGroupStageGroup(groupFilter)) {
-    groupNames = groupNames.filter((g) => g === groupFilter);
+function getKnockoutMatches(matches, roundName) {
+  return matches
+    .filter((m) => m.round === roundName && !m.group)
+    .sort((a, b) => a.datetime - b.datetime);
+}
+
+function renderKnockoutScore(match) {
+  if (match.status === "finished" && match.score) {
+    return `<span class="knockout-score">${match.score[0]} – ${match.score[1]}</span>`;
   }
-
-  if (!groupNames.length) {
-    els.standingsContainer.innerHTML = "";
-    els.standingsContainer.hidden = true;
-    return;
+  if (match.status === "live") {
+    if (match.score) {
+      return `<span class="knockout-score knockout-score-live">${match.score[0]} – ${match.score[1]}</span>`;
+    }
+    return `<span class="knockout-score knockout-score-live">Live</span>`;
   }
+  return `<span class="knockout-score knockout-score-tbd">–</span>`;
+}
 
-  els.standingsContainer.hidden = false;
-  els.standingsContainer.innerHTML = groupNames
-    .map((group) => {
-      const rows = standings[group];
-      const body = rows
-        .map((row, i) => {
-          const gd = row.gf - row.ga;
-          const gdLabel = gd > 0 ? `+${gd}` : String(gd);
-          const rowClass = i < 2 ? "standings-row standings-row-top" : i === 2 ? "standings-row standings-row-third" : "standings-row";
-          return `
-            <tr class="${rowClass}">
-              <td class="standings-cell-team">${renderStandingsTeamCell(row.team)}</td>
-              <td>${row.played}</td>
-              <td class="standings-hide-sm">${row.w}</td>
-              <td class="standings-hide-sm">${row.d}</td>
-              <td class="standings-hide-sm">${row.l}</td>
-              <td>${gdLabel}</td>
-              <td class="standings-pts">${row.pts}</td>
+function renderKnockoutTeam(name, groupStandings) {
+  const resolved = resolveGroupPosPlaceholder(name, groupStandings);
+  if (!isPlaceholderTeam(resolved)) {
+    if (hasSquad(resolved)) {
+      return `<button type="button" class="standings-team-link team-link knockout-team-btn" data-team="${escapeAttr(resolved)}">${renderStandingsTeamCell(resolved)}</button>`;
+    }
+    return renderStandingsTeamCell(resolved);
+  }
+  return `<span class="knockout-placeholder">${escapeHtml(name)}</span>`;
+}
+
+function renderKnockoutRound(roundName, matches, groupStandings) {
+  const body = matches
+    .map(
+      (m) => `
+        <tr class="knockout-row${m.status === "live" ? " is-live" : ""}${m.status === "finished" ? " is-finished" : ""}">
+          <td class="knockout-cell-team">${renderKnockoutTeam(m.team1, groupStandings)}</td>
+          <td class="knockout-cell-score">${renderKnockoutScore(m)}</td>
+          <td class="knockout-cell-team knockout-cell-away">${renderKnockoutTeam(m.team2, groupStandings)}</td>
+        </tr>
+      `
+    )
+    .join("");
+
+  return `
+    <div class="standings-group knockout-group">
+      <h3 class="standings-group-title">${escapeHtml(roundName)}</h3>
+      <div class="standings-table-wrap">
+        <table class="standings-table knockout-table">
+          <thead>
+            <tr>
+              <th scope="col">Home</th>
+              <th scope="col">Score</th>
+              <th scope="col">Away</th>
             </tr>
-          `;
-        })
-        .join("");
+          </thead>
+          <tbody>${body}</tbody>
+        </table>
+      </div>
+    </div>
+  `;
+}
 
+function renderGroupStandingsTable(group, rows) {
+  const body = rows
+    .map((row, i) => {
+      const gd = row.gf - row.ga;
+      const gdLabel = gd > 0 ? `+${gd}` : String(gd);
+      const rowClass = i < 2 ? "standings-row standings-row-top" : i === 2 ? "standings-row standings-row-third" : "standings-row";
       return `
-        <div class="standings-group">
-          <h3 class="standings-group-title">${escapeHtml(group)}</h3>
-          <div class="standings-table-wrap">
-            <table class="standings-table">
-              <thead>
-                <tr>
-                  <th scope="col">Team</th>
-                  <th scope="col" title="Played">P</th>
-                  <th scope="col" class="standings-hide-sm" title="Won">W</th>
-                  <th scope="col" class="standings-hide-sm" title="Drawn">D</th>
-                  <th scope="col" class="standings-hide-sm" title="Lost">L</th>
-                  <th scope="col" title="Goal difference">GD</th>
-                  <th scope="col" title="Points">Pts</th>
-                </tr>
-              </thead>
-              <tbody>${body}</tbody>
-            </table>
-          </div>
-        </div>
+        <tr class="${rowClass}">
+          <td class="standings-cell-team">${renderStandingsTeamCell(row.team)}</td>
+          <td>${row.played}</td>
+          <td class="standings-hide-sm">${row.w}</td>
+          <td class="standings-hide-sm">${row.d}</td>
+          <td class="standings-hide-sm">${row.l}</td>
+          <td>${gdLabel}</td>
+          <td class="standings-pts">${row.pts}</td>
+        </tr>
       `;
     })
     .join("");
+
+  return `
+    <div class="standings-group">
+      <h3 class="standings-group-title">${escapeHtml(group)}</h3>
+      <div class="standings-table-wrap">
+        <table class="standings-table">
+          <thead>
+            <tr>
+              <th scope="col">Team</th>
+              <th scope="col" title="Played">P</th>
+              <th scope="col" class="standings-hide-sm" title="Won">W</th>
+              <th scope="col" class="standings-hide-sm" title="Drawn">D</th>
+              <th scope="col" class="standings-hide-sm" title="Lost">L</th>
+              <th scope="col" title="Goal difference">GD</th>
+              <th scope="col" title="Points">Pts</th>
+            </tr>
+          </thead>
+          <tbody>${body}</tbody>
+        </table>
+      </div>
+    </div>
+  `;
+}
+
+function renderStandings() {
+  if (!els.standingsContainer) return;
+
+  const groupStandings = computeStandings(allMatches);
+  const groupFilter = els.groupFilter.value;
+  let groupNames = Object.keys(groupStandings).sort((a, b) => a.localeCompare(b));
+  let knockoutRounds = KNOCKOUT_ROUNDS.filter((r) => getKnockoutMatches(allMatches, r).length > 0);
+
+  if (isGroupStageGroup(groupFilter)) {
+    groupNames = groupNames.filter((g) => g === groupFilter);
+    knockoutRounds = [];
+  } else if (isKnockoutRound(groupFilter)) {
+    groupNames = [];
+    knockoutRounds = knockoutRounds.filter((r) => r === groupFilter);
+  }
+
+  const groupHtml = groupNames.length
+    ? `
+        <div class="standings-block">
+          <h3 class="standings-block-title">Group stage</h3>
+          <div class="standings-grid">${groupNames.map((g) => renderGroupStandingsTable(g, groupStandings[g])).join("")}</div>
+        </div>
+      `
+    : "";
+
+  const knockoutHtml = knockoutRounds.length
+    ? `
+        <div class="standings-block">
+          <h3 class="standings-block-title">Knockout stage</h3>
+          <div class="standings-grid standings-grid-knockout">
+            ${knockoutRounds.map((r) => renderKnockoutRound(r, getKnockoutMatches(allMatches, r), groupStandings)).join("")}
+          </div>
+        </div>
+      `
+    : "";
+
+  if (!groupHtml && !knockoutHtml) {
+    els.standingsContainer.innerHTML = `<p class="standings-empty">No standings for the selected filter.</p>`;
+    return;
+  }
+
+  els.standingsContainer.innerHTML = groupHtml + knockoutHtml;
+}
+
+function setStandingsOpen(open) {
+  const section = els.standingsToggle?.closest(".standings-section");
+  if (!section || !els.standingsPanel || !els.standingsToggle) return;
+
+  section.classList.toggle("is-open", open);
+  els.standingsPanel.hidden = !open;
+  els.standingsToggle.setAttribute("aria-expanded", String(open));
+  localStorage.setItem(STORAGE_KEYS.standingsOpen, String(open));
+}
+
+function initStandingsToggle() {
+  if (!els.standingsToggle || !els.standingsPanel) return;
+
+  const saved = localStorage.getItem(STORAGE_KEYS.standingsOpen);
+  const open = saved === "true";
+  setStandingsOpen(open);
+
+  els.standingsToggle.addEventListener("click", () => {
+    const isOpen = els.standingsToggle.getAttribute("aria-expanded") === "true";
+    setStandingsOpen(!isOpen);
+  });
 }
 
 function getFilteredMatches() {
@@ -924,6 +1056,7 @@ function boot() {
   initTimezoneSelect();
   restoreFilters();
   initSquadModal();
+  initStandingsToggle();
 
   els.refreshBtn.addEventListener("click", loadData);
   els.retryBtn.addEventListener("click", loadData);

@@ -60,12 +60,17 @@
       </div>
     </section>
 
-    <section class="standings-section" aria-label="Group standings">
-      <div class="standings-head">
-        <h2 class="standings-title">Group standings</h2>
-        <p class="standings-hint">Top 2 qualify · 8 best third-place teams also advance</p>
+    <section class="standings-section" aria-label="Standings and knockout">
+      <button type="button" class="standings-toggle" id="standings-toggle" aria-expanded="false" aria-controls="standings-panel">
+        <span class="standings-toggle-text">
+          <span class="standings-title">Standings &amp; knockout</span>
+          <span class="standings-hint">Groups · Round of 32 through Final</span>
+        </span>
+        <span class="standings-caret" aria-hidden="true">▾</span>
+      </button>
+      <div id="standings-panel" class="standings-panel" hidden>
+        <div id="standings-container" class="standings-content"></div>
       </div>
-      <div id="standings-container" class="standings-grid"></div>
     </section>
 
     <section class="controls" aria-label="Filters">

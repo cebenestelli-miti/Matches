@@ -330,45 +330,63 @@ async function fetchJson(url, timeoutMs = 8000) {
 async function fetchMatches() {
   const errors = [];
 
-  if (!IS_FILE_PROTOCOL) {
+  if (IS_FILE_PROTOCOL) {
     try {
-      const data = await fetchJson(LOCAL_JSON, 5000);
-      if (data.ok && Array.isArray(data.matches)) {
-        return {
-          matches: data.matches.map(normalizePrimaryMatch),
-          source: "local cache",
-          updated: data.updated ?? null,
-        };
-      }
+      return loadEmbeddedMatches();
     } catch (err) {
-      errors.push(`Local: ${err.message}`);
-      console.warn("Local JSON failed:", err);
+      throw new Error("Could not load bundled match data.");
     }
+  }
 
-    try {
-      const data = await fetchJson(API_PRIMARY, 8000);
-      if (!data.ok || !Array.isArray(data.matches)) throw new Error("Invalid API response");
-      return {
-        matches: data.matches.map(normalizePrimaryMatch),
-        source: "wcup2026.org",
-        updated: data.updated,
-      };
-    } catch (err) {
-      errors.push(`API: ${err.message}`);
-      console.warn("Primary API failed:", err);
-    }
+  const [apiResult, localResult] = await Promise.all([
+    fetchJson(API_PRIMARY, 12000).catch((err) => ({ error: err.message })),
+    fetchJson(LOCAL_JSON, 5000).catch((err) => ({ error: err.message })),
+  ]);
 
-    try {
-      const data = await fetchJson(API_FALLBACK, 8000);
-      return {
-        matches: normalizeFallbackMatches(data),
-        source: "openfootball",
-        updated: null,
-      };
-    } catch (err) {
-      errors.push(`Fallback: ${err.message}`);
-      console.warn("Openfootball fallback failed:", err);
-    }
+  const sources = [];
+
+  if (apiResult?.ok && Array.isArray(apiResult.matches)) {
+    sources.push({
+      data: apiResult,
+      source: "wcup2026.org",
+      updated: apiResult.updated ?? 0,
+    });
+  } else if (apiResult?.error) {
+    errors.push(`API: ${apiResult.error}`);
+    console.warn("Primary API failed:", apiResult.error);
+  }
+
+  if (localResult?.ok && Array.isArray(localResult.matches)) {
+    sources.push({
+      data: localResult,
+      source: "local cache",
+      updated: localResult.updated ?? 0,
+    });
+  } else if (localResult?.error) {
+    errors.push(`Local: ${localResult.error}`);
+    console.warn("Local JSON failed:", localResult.error);
+  }
+
+  if (sources.length) {
+    sources.sort((a, b) => b.updated - a.updated);
+    const best = sources[0];
+    return {
+      matches: best.data.matches.map(normalizePrimaryMatch),
+      source: best.source,
+      updated: best.data.updated ?? null,
+    };
+  }
+
+  try {
+    const data = await fetchJson(API_FALLBACK, 8000);
+    return {
+      matches: normalizeFallbackMatches(data),
+      source: "openfootball",
+      updated: null,
+    };
+  } catch (err) {
+    errors.push(`Fallback: ${err.message}`);
+    console.warn("Openfootball fallback failed:", err);
   }
 
   try {

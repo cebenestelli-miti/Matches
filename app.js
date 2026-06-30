@@ -475,10 +475,13 @@ function isPlaceholderTeam(name) {
 }
 
 function populateTeamFilter() {
+  const groupStandings = computeStandings(allMatches);
   const teams = new Set();
   for (const m of allMatches) {
-    if (!isPlaceholderTeam(m.team1)) teams.add(m.team1);
-    if (!isPlaceholderTeam(m.team2)) teams.add(m.team2);
+    const t1 = resolveTeamPlaceholder(m.team1, groupStandings, allMatches);
+    const t2 = resolveTeamPlaceholder(m.team2, groupStandings, allMatches);
+    if (!isPlaceholderTeam(t1)) teams.add(t1);
+    if (!isPlaceholderTeam(t2)) teams.add(t2);
   }
   const sorted = [...teams].sort((a, b) => a.localeCompare(b));
   const saved = localStorage.getItem(STORAGE_KEYS.team) || "";
@@ -598,6 +601,57 @@ function resolveGroupPosPlaceholder(name, groupStandings) {
   const group = `Group ${m[2]}`;
   const row = groupStandings[group]?.[idx];
   return row?.team || name;
+}
+
+function findMatchById(matches, id) {
+  return matches.find((m) => m.id === id);
+}
+
+function resolveTeamPlaceholder(name, groupStandings, allMatches) {
+  if (!name) return name;
+
+  const groupResolved = resolveGroupPosPlaceholder(name, groupStandings);
+  if (groupResolved !== name) return groupResolved;
+
+  const winnerMatch = String(name).match(/^W(\d+)$/);
+  if (winnerMatch) {
+    const source = findMatchById(allMatches, Number(winnerMatch[1]));
+    if (!source) return name;
+    const winner = inferKnockoutWinner(source, allMatches);
+    return winner && !isPlaceholderTeam(winner) ? winner : name;
+  }
+
+  const loserMatch = String(name).match(/^L(\d+)$/);
+  if (loserMatch) {
+    const source = findMatchById(allMatches, Number(loserMatch[1]));
+    if (!source) return name;
+    const winner = inferKnockoutWinner(source, allMatches);
+    if (!winner || isPlaceholderTeam(source.team1) || isPlaceholderTeam(source.team2)) return name;
+    const loser = winner === source.team1 ? source.team2 : source.team1;
+    return !isPlaceholderTeam(loser) ? loser : name;
+  }
+
+  return name;
+}
+
+function findTeamFlag(team, matches) {
+  if (!team) return "";
+  for (const m of matches) {
+    if (m.team1 === team && m.flag1) return m.flag1;
+    if (m.team2 === team && m.flag2) return m.flag2;
+  }
+  return flagUrlForTeam(team);
+}
+
+function getMatchDisplayTeams(match, groupStandings, allMatches) {
+  const team1 = resolveTeamPlaceholder(match.team1, groupStandings, allMatches);
+  const team2 = resolveTeamPlaceholder(match.team2, groupStandings, allMatches);
+  return {
+    team1,
+    team2,
+    flag1: findTeamFlag(team1, allMatches) || match.flag1 || "",
+    flag2: findTeamFlag(team2, allMatches) || match.flag2 || "",
+  };
 }
 
 function isKnockoutRound(name) {
@@ -793,6 +847,8 @@ function getMatchSignificance(match, matches) {
     return { team1: null, team2: null };
   }
 
+  const groupStandings = computeStandings(matches);
+
   if (isGroupStageGroup(match.group)) {
     return {
       team1: getGroupTeamSignificance(match.team1, match, matches),
@@ -802,9 +858,11 @@ function getMatchSignificance(match, matches) {
 
   if (isKnockoutRound(match.round)) {
     const label = getKnockoutTeamSignificance(match);
+    const team1 = resolveTeamPlaceholder(match.team1, groupStandings, matches);
+    const team2 = resolveTeamPlaceholder(match.team2, groupStandings, matches);
     return {
-      team1: isPlaceholderTeam(match.team1) ? null : label,
-      team2: isPlaceholderTeam(match.team2) ? null : label,
+      team1: isPlaceholderTeam(team1) ? null : label,
+      team2: isPlaceholderTeam(team2) ? null : label,
     };
   }
 
@@ -886,8 +944,8 @@ function getKnockoutMatchOutcome(match, allMatches) {
   };
 }
 
-function renderKnockoutTeamCell(name, groupStandings, result) {
-  const resolved = resolveGroupPosPlaceholder(name, groupStandings);
+function renderKnockoutTeamCell(name, groupStandings, allMatches, result) {
+  const resolved = resolveTeamPlaceholder(name, groupStandings, allMatches);
   const resultClass =
     result === "won"
       ? "knockout-team-won"
@@ -908,8 +966,8 @@ function renderKnockoutTeamCell(name, groupStandings, result) {
 
 function renderKnockoutFixtureRow(match, groupStandings, allMatches) {
   const outcome = getKnockoutMatchOutcome(match, allMatches);
-  const resolved1 = resolveGroupPosPlaceholder(match.team1, groupStandings);
-  const resolved2 = resolveGroupPosPlaceholder(match.team2, groupStandings);
+  const resolved1 = resolveTeamPlaceholder(match.team1, groupStandings, allMatches);
+  const resolved2 = resolveTeamPlaceholder(match.team2, groupStandings, allMatches);
   const dataTeam1 = !isPlaceholderTeam(resolved1) ? resolved1 : "";
   const dataTeam2 = !isPlaceholderTeam(resolved2) ? resolved2 : "";
 
@@ -917,8 +975,8 @@ function renderKnockoutFixtureRow(match, groupStandings, allMatches) {
   let team2Result = "pending";
 
   if (match.status === "finished" && outcome.winner) {
-    team1Result = match.team1 === outcome.winner ? "won" : "lost";
-    team2Result = match.team2 === outcome.winner ? "won" : "lost";
+    team1Result = resolved1 === outcome.winner ? "won" : "lost";
+    team2Result = resolved2 === outcome.winner ? "won" : "lost";
   } else if (match.status === "finished" && outcome.pens) {
     team1Result = "draw";
     team2Result = "draw";
@@ -940,9 +998,9 @@ function renderKnockoutFixtureRow(match, groupStandings, allMatches) {
   return `
     <li class="${rowClass}" data-match-id="${match.id}" data-team1="${escapeAttr(dataTeam1)}" data-team2="${escapeAttr(dataTeam2)}">
       <div class="knockout-fixture-teams">
-        ${renderKnockoutTeamCell(match.team1, groupStandings, team1Result)}
+        ${renderKnockoutTeamCell(match.team1, groupStandings, allMatches, team1Result)}
         <span class="knockout-fixture-score">${scoreHtml}</span>
-        ${renderKnockoutTeamCell(match.team2, groupStandings, team2Result)}
+        ${renderKnockoutTeamCell(match.team2, groupStandings, allMatches, team2Result)}
       </div>
     </li>
   `;
@@ -1092,13 +1150,15 @@ function getFilteredMatches() {
   const status = els.statusFilter.value;
   const group = els.groupFilter.value;
   const query = els.searchInput.value.trim().toLowerCase();
+  const groupStandings = computeStandings(allMatches);
 
   return allMatches.filter((m) => {
-    if (team && m.team1 !== team && m.team2 !== team) return false;
+    const display = getMatchDisplayTeams(m, groupStandings, allMatches);
+    if (team && display.team1 !== team && display.team2 !== team) return false;
     if (!matchPassesStatusFilter(m, status)) return false;
     if (group && m.group !== group && m.round !== group) return false;
     if (query) {
-      const haystack = [m.team1, m.team2, m.group, m.round, m.ground].join(" ").toLowerCase();
+      const haystack = [display.team1, display.team2, m.group, m.round, m.ground].join(" ").toLowerCase();
       if (!haystack.includes(query)) return false;
     }
     return true;
@@ -1291,7 +1351,7 @@ function applyStandingsHighlight(stageName, teams) {
 
   const groupStandings = computeStandings(allMatches);
   const resolvedTeams = teams
-    .map((t) => resolveGroupPosPlaceholder(t, groupStandings))
+    .map((t) => resolveTeamPlaceholder(t, groupStandings, allMatches))
     .filter((t) => t && !isPlaceholderTeam(t));
 
   let highlightTarget = null;
@@ -1374,11 +1434,14 @@ function initSquadModal() {
 }
 
 function renderMatchCard(match, tz) {
-  const flag1 = match.flag1
-    ? `<img class="team-flag" src="${escapeAttr(match.flag1)}" alt="" loading="lazy" width="32" height="22">`
+  const groupStandings = computeStandings(allMatches);
+  const display = getMatchDisplayTeams(match, groupStandings, allMatches);
+
+  const flag1 = display.flag1
+    ? `<img class="team-flag" src="${escapeAttr(display.flag1)}" alt="" loading="lazy" width="32" height="22">`
     : "";
-  const flag2 = match.flag2
-    ? `<img class="team-flag" src="${escapeAttr(match.flag2)}" alt="" loading="lazy" width="32" height="22">`
+  const flag2 = display.flag2
+    ? `<img class="team-flag" src="${escapeAttr(display.flag2)}" alt="" loading="lazy" width="32" height="22">`
     : "";
 
   const significance = getMatchSignificance(match, allMatches);
@@ -1395,16 +1458,16 @@ function renderMatchCard(match, tz) {
 
   return `
     <article class="${cardClass}" data-id="${match.id}">
-      ${renderTeamBlock(match.team1, flag1, significance.team1, false)}
+      ${renderTeamBlock(display.team1, flag1, significance.team1, false)}
       <div class="match-center">
         ${renderCenter(match, tz)}
         ${renderStatusBadge(match)}
         ${match.status === "live" ? `<span class="match-vs">${dateLabel}</span>` : ""}
       </div>
-      ${renderTeamBlock(match.team2, flag2, significance.team2, true)}
+      ${renderTeamBlock(display.team2, flag2, significance.team2, true)}
       <div class="match-meta">
-        ${match.group ? renderStageLink(match.group, match.group, match.team1, match.team2) : ""}
-        ${match.round && isKnockoutRound(match.round) ? renderStageLink(match.round, match.round, match.team1, match.team2) : match.round ? `<span>${escapeHtml(match.round)}</span>` : ""}
+        ${match.group ? renderStageLink(match.group, match.group, display.team1, display.team2) : ""}
+        ${match.round && isKnockoutRound(match.round) ? renderStageLink(match.round, match.round, display.team1, display.team2) : match.round ? `<span>${escapeHtml(match.round)}</span>` : ""}
         ${match.ground ? `<span>📍 ${escapeHtml(match.ground)}</span>` : ""}
       </div>
     </article>

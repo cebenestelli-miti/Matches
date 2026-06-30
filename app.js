@@ -1,5 +1,7 @@
 const API_PRIMARY = "https://wcup2026.org/api/data.php?action=all";
 const API_FALLBACK = "https://raw.githubusercontent.com/openfootball/worldcup.json/master/2026/worldcup.json";
+const CUP_FINALS_URL =
+  "https://raw.githubusercontent.com/openfootball/worldcup/master/2026--usa/cup_finals.txt";
 const LOCAL_JSON = "data/matches.json";
 const API_FETCH_TIMEOUT_MS = 20000;
 const AUTO_REFRESH_MS = 5 * 60 * 1000;
@@ -34,6 +36,9 @@ const POS_LABELS = { GK: "Goalkeepers", DF: "Defenders", MF: "Midfielders", FW: 
 
 /** @type {Record<string, {group:string, coach:string, players:Array}>} */
 let squadTeams = {};
+
+/** @type {Map<string, {winner:string, pens:Record<string, number>}>} */
+let knockoutPenaltyResults = new Map();
 
 const $ = (sel) => document.querySelector(sel);
 
@@ -314,6 +319,21 @@ function loadEmbeddedMatches() {
   };
 }
 
+async function fetchText(url, timeoutMs = 8000) {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
+  try {
+    const res = await fetch(url, { cache: "no-store", signal: controller.signal });
+    if (!res.ok) throw new Error(`Request failed (${res.status})`);
+    return res.text();
+  } catch (err) {
+    if (err.name === "AbortError") throw new Error("Request timed out");
+    throw err;
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
 async function fetchJson(url, timeoutMs = 8000) {
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), timeoutMs);
@@ -327,6 +347,48 @@ async function fetchJson(url, timeoutMs = 8000) {
   } finally {
     clearTimeout(timer);
   }
+}
+
+function matchPairKey(team1, team2) {
+  return [team1, team2].sort((a, b) => a.localeCompare(b)).join("|");
+}
+
+function parseCupFinalsPenalties(text) {
+  const map = new Map();
+  if (!text) return map;
+
+  const penRe =
+    /([A-Za-z][A-Za-z &.'éÉçÇäöüÄÖÜßø-]+?)\s+(\d+)-(\d+)\s+a\.e\.t\.\s*\([^)]+\),\s*(\d+)-(\d+)\s+pen\.\s+([A-Za-z][A-Za-z &.'éÉçÇäöüÄÖÜßø-]+?)\s+@/g;
+
+  for (const match of text.matchAll(penRe)) {
+    const team1 = match[1].trim();
+    const team2 = match[6].trim();
+    const pen1 = Number(match[4]);
+    const pen2 = Number(match[5]);
+    const winner = pen2 > pen1 ? team2 : team1;
+
+    map.set(matchPairKey(team1, team2), {
+      winner,
+      pens: { [team1]: pen1, [team2]: pen2 },
+    });
+  }
+
+  return map;
+}
+
+async function loadKnockoutPenaltyResults() {
+  try {
+    const text = await fetchText(CUP_FINALS_URL, 8000);
+    knockoutPenaltyResults = parseCupFinalsPenalties(text);
+  } catch (err) {
+    console.warn("Knockout penalty results unavailable:", err);
+    knockoutPenaltyResults = new Map();
+  }
+}
+
+function getPenaltyResult(match) {
+  if (!match?.team1 || !match?.team2) return null;
+  return knockoutPenaltyResults.get(matchPairKey(match.team1, match.team2)) || null;
 }
 
 async function fetchMatches() {
@@ -771,6 +833,9 @@ function inferKnockoutWinner(match, allMatches) {
   if (s1 > s2) return match.team1;
   if (s2 > s1) return match.team2;
 
+  const penalty = getPenaltyResult(match);
+  if (penalty?.winner) return penalty.winner;
+
   if (isPlaceholderTeam(match.team1) || isPlaceholderTeam(match.team2)) return null;
 
   const laterKnockout = allMatches.filter(
@@ -799,6 +864,17 @@ function getKnockoutMatchOutcome(match, allMatches) {
       winner: s1 > s2 ? match.team1 : match.team2,
       scoreLabel: `${s1}–${s2}`,
       pens: false,
+    };
+  }
+
+  const penalty = getPenaltyResult(match);
+  if (penalty) {
+    const p1 = penalty.pens[match.team1];
+    const p2 = penalty.pens[match.team2];
+    return {
+      winner: penalty.winner,
+      scoreLabel: `${s1}–${s2} (${p1}–${p2} pens)`,
+      pens: true,
     };
   }
 
@@ -1059,6 +1135,10 @@ function renderStatusBadge(match) {
 function renderCenter(match, tz) {
   if (match.status === "finished") {
     if (match.score) {
+      if (isKnockoutRound(match.round)) {
+        const outcome = getKnockoutMatchOutcome(match, allMatches);
+        return `<span class="match-score">${escapeHtml(outcome.scoreLabel || `${match.score[0]} – ${match.score[1]}`)}</span>`;
+      }
       return `<span class="match-score">${match.score[0]} – ${match.score[1]}</span>`;
     }
     return `<span class="match-score match-score-pending">–</span>`;
@@ -1423,7 +1503,10 @@ async function loadData() {
   hideError();
 
   try {
-    const { matches, source, updated } = await fetchMatches();
+    const [{ matches, source, updated }] = await Promise.all([
+      fetchMatches(),
+      loadKnockoutPenaltyResults(),
+    ]);
     allMatches = matches;
     populateTeamFilter();
     populateGroupFilter();

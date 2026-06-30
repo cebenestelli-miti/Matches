@@ -1,6 +1,8 @@
 const API_PRIMARY = "https://wcup2026.org/api/data.php?action=all";
 const API_FALLBACK = "https://raw.githubusercontent.com/openfootball/worldcup.json/master/2026/worldcup.json";
 const LOCAL_JSON = "data/matches.json";
+const API_FETCH_TIMEOUT_MS = 20000;
+const AUTO_REFRESH_MS = 5 * 60 * 1000;
 const IS_FILE_PROTOCOL = window.location.protocol === "file:";
 
 const STORAGE_KEYS = {
@@ -339,7 +341,7 @@ async function fetchMatches() {
   }
 
   const [apiResult, localResult] = await Promise.all([
-    fetchJson(API_PRIMARY, 12000).catch((err) => ({ error: err.message })),
+    fetchJson(API_PRIMARY, API_FETCH_TIMEOUT_MS).catch((err) => ({ error: err.message })),
     fetchJson(LOCAL_JSON, 5000).catch((err) => ({ error: err.message })),
   ]);
 
@@ -1421,6 +1423,9 @@ function boot() {
     .then(async () => {
       await loadData();
       startMatchCountdowns();
+      setInterval(() => {
+        if (document.visibilityState === "visible") loadData();
+      }, AUTO_REFRESH_MS);
     });
 }
 

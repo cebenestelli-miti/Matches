@@ -1,0 +1,16 @@
+---
+description: Commit and push to main after every code change in this project
+alwaysApply: true
+---
+
+# Git sync after changes
+
+When you finish making changes to this project:
+
+1. Run `git status` and commit all relevant changes (do not commit secrets).
+2. Push to `origin main` immediately — do not wait for the user to ask.
+3. Confirm the push succeeded and report the commit hash briefly.
+
+The live site is GitHub Pages at https://cebenestelli-miti.github.io/Matches/ — pushing `main` deploys updates.
+
+If there are no changes to commit, say so and verify the branch is up to date with `origin/main`.

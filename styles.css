@@ -597,6 +597,46 @@ button.top-team-chip:hover {
 
 .knockout-fixture-team {
   min-width: 0;
+  padding: 0.25rem 0.4rem;
+  border-radius: var(--radius-sm);
+}
+
+.knockout-fixture-team.knockout-team-won {
+  background: rgba(5, 150, 105, 0.14);
+  box-shadow: inset 3px 0 0 var(--accent);
+}
+
+.knockout-fixture-team.knockout-team-lost {
+  background: rgba(220, 38, 38, 0.1);
+  box-shadow: inset 3px 0 0 #dc2626;
+  opacity: 0.88;
+}
+
+.knockout-fixture-team.knockout-team-draw {
+  background: rgba(15, 23, 42, 0.04);
+  box-shadow: inset 3px 0 0 var(--text-dim);
+}
+
+.knockout-fixture-team:last-child.knockout-team-won,
+.knockout-fixture-team:last-child.knockout-team-lost,
+.knockout-fixture-team:last-child.knockout-team-draw {
+  box-shadow: inset -3px 0 0 var(--accent);
+}
+
+.knockout-fixture-team:last-child.knockout-team-lost {
+  box-shadow: inset -3px 0 0 #dc2626;
+}
+
+.knockout-fixture-team:last-child.knockout-team-draw {
+  box-shadow: inset -3px 0 0 var(--text-dim);
+}
+
+.knockout-bracket .knockout-fixture {
+  padding: 0.5rem 0.65rem;
+}
+
+.knockout-fixture-flash {
+  animation: standings-block-flash 0.85s ease 2;
 }
 
 .knockout-fixture-team:first-child .standings-team {

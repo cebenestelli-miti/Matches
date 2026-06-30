@@ -764,64 +764,117 @@ function renderTeamBlock(team, flagHtml, significance, away) {
   `;
 }
 
-function computeRoundStandings(matches, groupStandings) {
-  const teams = {};
+function inferKnockoutWinner(match, allMatches) {
+  if (match.status !== "finished" || !match.score || match.score.length !== 2) return null;
 
-  const ensureTeam = (name) => {
-    const resolved = resolveGroupPosPlaceholder(name, groupStandings);
-    if (isPlaceholderTeam(resolved)) return null;
-    if (!teams[resolved]) {
-      teams[resolved] = { team: resolved, played: 0, w: 0, d: 0, l: 0, gf: 0, ga: 0, pts: 0 };
-    }
-    return teams[resolved];
+  const [s1, s2] = match.score;
+  if (s1 > s2) return match.team1;
+  if (s2 > s1) return match.team2;
+
+  if (isPlaceholderTeam(match.team1) || isPlaceholderTeam(match.team2)) return null;
+
+  const laterKnockout = allMatches.filter(
+    (m) => !m.group && isKnockoutRound(m.round) && m.datetime > match.datetime
+  );
+
+  const t1Advances = laterKnockout.some((m) => m.team1 === match.team1 || m.team2 === match.team1);
+  const t2Advances = laterKnockout.some((m) => m.team1 === match.team2 || m.team2 === match.team2);
+  if (t1Advances && !t2Advances) return match.team1;
+  if (t2Advances && !t1Advances) return match.team2;
+
+  return null;
+}
+
+function getKnockoutMatchOutcome(match, allMatches) {
+  if (match.status === "live") {
+    return { winner: null, scoreLabel: match.score ? `${match.score[0]}–${match.score[1]}` : "Live", pens: false };
+  }
+  if (match.status !== "finished" || !match.score) {
+    return { winner: null, scoreLabel: null, pens: false };
+  }
+
+  const [s1, s2] = match.score;
+  if (s1 !== s2) {
+    return {
+      winner: s1 > s2 ? match.team1 : match.team2,
+      scoreLabel: `${s1}–${s2}`,
+      pens: false,
+    };
+  }
+
+  const winner = inferKnockoutWinner(match, allMatches);
+  return {
+    winner,
+    scoreLabel: winner ? `${s1}–${s2} (pens)` : `${s1}–${s2} (a.e.t.)`,
+    pens: true,
   };
+}
 
-  for (const m of matches) {
-    ensureTeam(m.team1);
-    ensureTeam(m.team2);
+function renderKnockoutTeamCell(name, groupStandings, result) {
+  const resolved = resolveGroupPosPlaceholder(name, groupStandings);
+  const resultClass =
+    result === "won"
+      ? "knockout-team-won"
+      : result === "lost"
+        ? "knockout-team-lost"
+        : result === "draw"
+          ? "knockout-team-draw"
+          : "";
+
+  const inner = isPlaceholderTeam(resolved)
+    ? `<span class="knockout-placeholder">${escapeHtml(name)}</span>`
+    : renderStandingsTeamCell(resolved);
+
+  const dataTeam = !isPlaceholderTeam(resolved) ? ` data-team="${escapeAttr(resolved)}"` : "";
+
+  return `<span class="knockout-fixture-team ${resultClass}"${dataTeam}>${inner}</span>`;
+}
+
+function renderKnockoutFixtureRow(match, groupStandings, allMatches) {
+  const outcome = getKnockoutMatchOutcome(match, allMatches);
+  const resolved1 = resolveGroupPosPlaceholder(match.team1, groupStandings);
+  const resolved2 = resolveGroupPosPlaceholder(match.team2, groupStandings);
+  const dataTeam1 = !isPlaceholderTeam(resolved1) ? resolved1 : "";
+  const dataTeam2 = !isPlaceholderTeam(resolved2) ? resolved2 : "";
+
+  let team1Result = "pending";
+  let team2Result = "pending";
+
+  if (match.status === "finished" && outcome.winner) {
+    team1Result = match.team1 === outcome.winner ? "won" : "lost";
+    team2Result = match.team2 === outcome.winner ? "won" : "lost";
+  } else if (match.status === "finished" && outcome.pens) {
+    team1Result = "draw";
+    team2Result = "draw";
   }
 
-  for (const m of matches) {
-    if ((m.status !== "finished" && m.status !== "live") || !m.score || m.score.length !== 2) continue;
+  const rowClass = [
+    "knockout-fixture",
+    match.status === "live" ? "is-live" : "",
+    match.status === "finished" ? "is-finished" : "",
+  ]
+    .filter(Boolean)
+    .join(" ");
 
-    const t1 = resolveGroupPosPlaceholder(m.team1, groupStandings);
-    const t2 = resolveGroupPosPlaceholder(m.team2, groupStandings);
-    const row1 = teams[t1];
-    const row2 = teams[t2];
-    if (!row1 || !row2) continue;
+  const scoreHtml =
+    match.status === "upcoming"
+      ? `<span class="knockout-score knockout-score-tbd">–</span>`
+      : `<span class="knockout-score${match.status === "live" ? " knockout-score-live" : ""}">${escapeHtml(outcome.scoreLabel || "–")}</span>`;
 
-    const [s1, s2] = m.score;
-    row1.played++;
-    row2.played++;
-    row1.gf += s1;
-    row1.ga += s2;
-    row2.gf += s2;
-    row2.ga += s1;
+  return `
+    <li class="${rowClass}" data-match-id="${match.id}" data-team1="${escapeAttr(dataTeam1)}" data-team2="${escapeAttr(dataTeam2)}">
+      <div class="knockout-fixture-teams">
+        ${renderKnockoutTeamCell(match.team1, groupStandings, team1Result)}
+        <span class="knockout-fixture-score">${scoreHtml}</span>
+        ${renderKnockoutTeamCell(match.team2, groupStandings, team2Result)}
+      </div>
+    </li>
+  `;
+}
 
-    if (s1 > s2) {
-      row1.w++;
-      row1.pts += 3;
-      row2.l++;
-    } else if (s2 > s1) {
-      row2.w++;
-      row2.pts += 3;
-      row1.l++;
-    } else {
-      row1.d++;
-      row2.d++;
-      row1.pts++;
-      row2.pts++;
-    }
-  }
-
-  return Object.values(teams).sort((a, b) => {
-    const gdA = a.gf - a.ga;
-    const gdB = b.gf - b.ga;
-    if (b.pts !== a.pts) return b.pts - a.pts;
-    if (gdB !== gdA) return gdB - gdA;
-    if (b.gf !== a.gf) return b.gf - a.gf;
-    return a.team.localeCompare(b.team);
-  });
+function renderKnockoutFixturesList(matches, groupStandings, allMatches) {
+  const items = matches.map((m) => renderKnockoutFixtureRow(m, groupStandings, allMatches)).join("");
+  return `<ol class="knockout-fixtures knockout-bracket">${items}</ol>`;
 }
 
 function renderStageDropdown(title, meta, innerHtml, stageKey) {
@@ -843,17 +896,17 @@ function renderStageDropdown(title, meta, innerHtml, stageKey) {
 }
 
 function renderKnockoutRoundDropdown(roundName, matches, groupStandings) {
-  const rows = computeRoundStandings(matches, groupStandings);
-  const played = matches.filter((m) => m.status === "finished" || m.status === "live").length;
-  const meta = rows.length
-    ? `${rows.length} team${rows.length !== 1 ? "s" : ""}${played ? ` · ${played} played` : ""}`
-    : "TBD";
+  const finished = matches.filter((m) => m.status === "finished").length;
+  const live = matches.filter((m) => m.status === "live").length;
+  const metaParts = [`${matches.length} fixture${matches.length !== 1 ? "s" : ""}`];
+  if (live) metaParts.push(`${live} live`);
+  else if (finished) metaParts.push(`${finished} played`);
 
-  const inner = rows.length
-    ? renderGroupStandingsTable(rows, { highlightTop: false })
-    : `<p class="standings-empty">Teams TBD</p>`;
+  const inner = matches.length
+    ? renderKnockoutFixturesList(matches, groupStandings, allMatches)
+    : `<p class="standings-empty">Fixtures TBD</p>`;
 
-  return renderStageDropdown(roundName, meta, inner);
+  return renderStageDropdown(roundName, metaParts.join(" · "), inner);
 }
 
 function renderGroupStandingsTable(rows, { highlightTop = true } = {}) {
@@ -1144,8 +1197,8 @@ function ensureStandingsForStage(stageName) {
 }
 
 function clearStandingsFlash() {
-  els.standingsContainer?.querySelectorAll(".standings-flash, .standings-row-flash").forEach((el) => {
-    el.classList.remove("standings-flash", "standings-row-flash");
+  els.standingsContainer?.querySelectorAll(".standings-flash, .standings-row-flash, .knockout-fixture-flash").forEach((el) => {
+    el.classList.remove("standings-flash", "standings-row-flash", "knockout-fixture-flash");
   });
 }
 
@@ -1194,6 +1247,11 @@ function applyStandingsHighlight(stageName, teams) {
     for (const row of container.querySelectorAll(".standings-row")) {
       if (row.dataset.team === team) {
         row.classList.add("standings-row-flash");
+      }
+    }
+    for (const fixture of container.querySelectorAll(".knockout-fixture")) {
+      if (fixture.dataset.team1 === team || fixture.dataset.team2 === team) {
+        fixture.classList.add("knockout-fixture-flash");
       }
     }
   }
